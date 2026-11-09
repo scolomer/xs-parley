@@ -1,0 +1,48 @@
+{
+  "description": "cert = {body, sig}; sig = Ed25519(rank seed, UTF-8(JCS(body))), base64url",
+  "now": "2026-11-01T12:00:01.000Z",
+  "cases": [
+    {
+      "signing_key": "xs2:relay.example.com:8443:24pD5Dl-9lczoiWSwNrthQ:prod-k8s:A:m3CgF4cCdgohx6wx4WYG25beG7oxHbrzrAEO38Nu6hE:h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY",
+      "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
+      "sign_pub": "LHZKPitmbajMr3tXIVjdIx93aWXZH4cgKShG3pZ8b5U",
+      "kem_pub": "nb4MMfkUwQwwd-PVl5aDNWqXb4ydC6qdR9_i2PseVj4",
+      "jcs_body": "{\"alias\":\"alice\",\"issued_at\":\"2026-11-01T10:00:00.000Z\",\"kem_pub\":\"nb4MMfkUwQwwd-PVl5aDNWqXb4ydC6qdR9_i2PseVj4\",\"rank\":\"A\",\"role\":\"master « accès prod » 🚀\",\"sign_pub\":\"LHZKPitmbajMr3tXIVjdIx93aWXZH4cgKShG3pZ8b5U\",\"v\":1,\"xshell_id\":\"24pD5Dl-9lczoiWSwNrthQ\"}",
+      "cert": {
+        "body": {
+          "v": 1,
+          "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
+          "rank": "A",
+          "sign_pub": "LHZKPitmbajMr3tXIVjdIx93aWXZH4cgKShG3pZ8b5U",
+          "kem_pub": "nb4MMfkUwQwwd-PVl5aDNWqXb4ydC6qdR9_i2PseVj4",
+          "alias": "alice",
+          "role": "master « accès prod » 🚀",
+          "issued_at": "2026-11-01T10:00:00.000Z"
+        },
+        "sig": "r2a2FKqvtATdN2itE8S0J5unQvMT4cac6dW8sX3nNW8hvyJPOddHpxY473FfKZ33fRgIsozqaE2-GiY9Ao70Bw"
+      },
+      "fp": "xs:WlPFl4bROMLwrv9_QqiIxXtrclo8lUn4TYePLrJzyYw"
+    },
+    {
+      "signing_key": "xs2:relay.example.com:8443:24pD5Dl-9lczoiWSwNrthQ:prod-k8s:S:h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY:zaXtGGBGS4LBlQuEorVBexaB8ni-P4It4g8O26qD7Xw",
+      "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
+      "sign_pub": "WZHQuuUvl0gIqqTH33psl6wTMAymc0zBb4JiXWxZZsQ",
+      "kem_pub": "TJds3ZlrwTqRR6o3UMMLqUjuLfwubu0Vst4vkgwefVw",
+      "jcs_body": "{\"alias\":\"prod-box\",\"issued_at\":\"2026-11-01T10:00:00.000Z\",\"kem_pub\":\"TJds3ZlrwTqRR6o3UMMLqUjuLfwubu0Vst4vkgwefVw\",\"rank\":\"S\",\"role\":\"accès prod k8s, kubectl lecture\",\"sign_pub\":\"WZHQuuUvl0gIqqTH33psl6wTMAymc0zBb4JiXWxZZsQ\",\"v\":1,\"xshell_id\":\"24pD5Dl-9lczoiWSwNrthQ\"}",
+      "cert": {
+        "body": {
+          "v": 1,
+          "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
+          "rank": "S",
+          "sign_pub": "WZHQuuUvl0gIqqTH33psl6wTMAymc0zBb4JiXWxZZsQ",
+          "kem_pub": "TJds3ZlrwTqRR6o3UMMLqUjuLfwubu0Vst4vkgwefVw",
+          "alias": "prod-box",
+          "role": "accès prod k8s, kubectl lecture",
+          "issued_at": "2026-11-01T10:00:00.000Z"
+        },
+        "sig": "fMf7bd1ecieHxhMNwl527rShghNvoIA6OEKJr2EeOAS6KNvo1hWdEY7yMBkJL1a2kCHws9cu7YSX72djb7cYBw"
+      },
+      "fp": "xs:dOGYIaBypi9R0mzsPDSsD3AWV3qlUr6lai2gsKz5pjg"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "omp-xshell",
+  "version": "0.1.0",
+  "description": "omp extension: delegate actions to other omp sessions through an end-to-end encrypted relay",
+  "type": "module",
+  "private": true,
+  "omp": {
+    "extensions": ["./src/index.ts"]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@hpke/chacha20poly1305": "^1.8.1",
+    "@hpke/core": "^1.10.1",
+    "@hpke/dhkem-x25519": "^1.8.1",
+    "@noble/ciphers": "^2.4.0",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "canonicalize": "^5.1.0"
+  },
+  "devDependencies": {
+    "@oh-my-pi/pi-ai": "18.18.3",
+    "@oh-my-pi/pi-coding-agent": "18.18.3",
+    "@oh-my-pi/pi-tui": "18.18.3",
+    "@oh-my-pi/pi-utils": "18.18.3",
+    "@types/bun": "^1.4.4",
+    "typescript": "^7.0.2"
+  }
+}

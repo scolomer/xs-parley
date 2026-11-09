@@ -1,0 +1,53 @@
+{
+  "description": "HPKE base mode, KEM 0x0020, KDF 0x0001, AEAD 0x0003, info = 'xshell env v1', aad = UTF-8(JCS(h)); sig = Ed25519(sender seed, UTF-8(JCS({h, enc, ct})))",
+  "now": "2026-11-01T12:00:01.000Z",
+  "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
+  "verifier_key": "xs2:relay.example.com:8443:24pD5Dl-9lczoiWSwNrthQ:prod-k8s:S:h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY:zaXtGGBGS4LBlQuEorVBexaB8ni-P4It4g8O26qD7Xw",
+  "sender_sign_seed": "Ipe6Dgf_G2-emFznfhG1CwAVxqNBjDJzwoH9EAGoEDQ",
+  "recipient_kem_priv": "BTBNmd8YuhBlcCdu7zgaeyLKVS3TQ0cJC-f5--yB_Zo",
+  "recipient_kem_pub": "TJds3ZlrwTqRR6o3UMMLqUjuLfwubu0Vst4vkgwefVw",
+  "hpke_ephemeral_ikm": "5oSn9OBZACafG7yrTZlLsSSxdYT7etH0130iKD4x0Lg",
+  "h": {
+    "v": 1,
+    "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
+    "msg_id": "01939f0c-7a3e-7b2d-8c4e-5f6a7b8c9d0e",
+    "kind": "request",
+    "from": "xs:WlPFl4bROMLwrv9_QqiIxXtrclo8lUn4TYePLrJzyYw",
+    "to": "xs:dOGYIaBypi9R0mzsPDSsD3AWV3qlUr6lai2gsKz5pjg",
+    "reply_to": null,
+    "ts": "2026-11-01T12:00:00.000Z"
+  },
+  "jcs_h": "{\"from\":\"xs:WlPFl4bROMLwrv9_QqiIxXtrclo8lUn4TYePLrJzyYw\",\"kind\":\"request\",\"msg_id\":\"01939f0c-7a3e-7b2d-8c4e-5f6a7b8c9d0e\",\"reply_to\":null,\"to\":\"xs:dOGYIaBypi9R0mzsPDSsD3AWV3qlUr6lai2gsKz5pjg\",\"ts\":\"2026-11-01T12:00:00.000Z\",\"v\":1,\"xshell_id\":\"24pD5Dl-9lczoiWSwNrthQ\"}",
+  "plain": {
+    "cert": {
+      "body": {
+        "v": 1,
+        "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
+        "rank": "A",
+        "sign_pub": "LHZKPitmbajMr3tXIVjdIx93aWXZH4cgKShG3pZ8b5U",
+        "kem_pub": "nb4MMfkUwQwwd-PVl5aDNWqXb4ydC6qdR9_i2PseVj4",
+        "alias": "alice",
+        "role": "master « accès prod » 🚀",
+        "issued_at": "2026-11-01T10:00:00.000Z"
+      },
+      "sig": "r2a2FKqvtATdN2itE8S0J5unQvMT4cac6dW8sX3nNW8hvyJPOddHpxY473FfKZ33fRgIsozqaE2-GiY9Ao70Bw"
+    },
+    "text": "Liste les pods :\n\t\"kubectl get pods\" \u0001 😀 é"
+  },
+  "jcs_plain": "{\"cert\":{\"body\":{\"alias\":\"alice\",\"issued_at\":\"2026-11-01T10:00:00.000Z\",\"kem_pub\":\"nb4MMfkUwQwwd-PVl5aDNWqXb4ydC6qdR9_i2PseVj4\",\"rank\":\"A\",\"role\":\"master « accès prod » 🚀\",\"sign_pub\":\"LHZKPitmbajMr3tXIVjdIx93aWXZH4cgKShG3pZ8b5U\",\"v\":1,\"xshell_id\":\"24pD5Dl-9lczoiWSwNrthQ\"},\"sig\":\"r2a2FKqvtATdN2itE8S0J5unQvMT4cac6dW8sX3nNW8hvyJPOddHpxY473FfKZ33fRgIsozqaE2-GiY9Ao70Bw\"},\"text\":\"Liste les pods :\\n\\t\\\"kubectl get pods\\\" \\u0001 😀 é\"}",
+  "envelope": {
+    "h": {
+      "v": 1,
+      "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
+      "msg_id": "01939f0c-7a3e-7b2d-8c4e-5f6a7b8c9d0e",
+      "kind": "request",
+      "from": "xs:WlPFl4bROMLwrv9_QqiIxXtrclo8lUn4TYePLrJzyYw",
+      "to": "xs:dOGYIaBypi9R0mzsPDSsD3AWV3qlUr6lai2gsKz5pjg",
+      "reply_to": null,
+      "ts": "2026-11-01T12:00:00.000Z"
+    },
+    "enc": "alB1Wz5A5jZesbkrLfpClwRJlo9jdqkXlj6pbpAt_xM",
+    "ct": "pVIj9AhYK_STynr4CoRZoo95eCPBLQlLkEnQjP6EzZTWPyN0GPMwTuUBfqdsXjgnyt2WTx0qaSNtXdj4Aly5jhRlQO7zpazyvrVYRtbrVsGZSP_BWHb5zDuBd86T_Cma4LOOtYTvtKSQxCnsZs1YDwvw9M5X8vzlnlik8Ob7ew-5pZB24RleaY9IhSVza1mixrdrY_dGw3kycqXktt_4765Q0ganOUp-xUitSsWJSDKZ-WPd7zXb6IzdWO_WJV93XWoClWTCgDMQITq5MHaAzZ96KiuGdGHa5lkYZnnBepZuzN3y60NNP0zi9ga3Fm1wr8B5C8cxqMazp3BtT8TpLOcq2wTdG8dgsh0LiqeSi0E_H_3TWChHza4yiyquFbECJQBKYT-aM3uwRcBR3BiSyYZqpvZzKhXt7cPvCquNB2kTs4yaaU6VusjXLrkwgllBdv_OHO69fM-7qP8aVHFFyPbVLzma_PXN2gUOXQ5g4zpWqLkBhNnwONhLPVoAIHSRsmeMa5fi14AeBoFtyd7YvV8cyCpw9P6av1KbxVl353o2pJtMtU0VKgD8NacqIs8NXxKzJtIat2O8K-88ZEQHQRujclfb-hla",
+    "sig": "Q0iC-SrcCdEVcC-9F6hi-O6U9yOLxEP4vtTX4upQp1r3zqKQVodtCxoVU7vflB5aVdTDZDKK1Cnyly0sZF-aBg"
+  }
+}

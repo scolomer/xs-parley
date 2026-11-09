@@ -1,0 +1,32 @@
+{
+  "description": "Shell key format xs2:<relay>:<xshell_id>:<name>:<rank>:<seed>:<other>; other = seed_answer for rank A, pub_ask for rank S; the relay may contain a port",
+  "cases": [
+    {
+      "key": "xs2:relay.example.com:8443:24pD5Dl-9lczoiWSwNrthQ:prod-k8s:A:m3CgF4cCdgohx6wx4WYG25beG7oxHbrzrAEO38Nu6hE:h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY",
+      "relay": "relay.example.com:8443",
+      "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
+      "name": "prod-k8s",
+      "rank": "A",
+      "seed": "m3CgF4cCdgohx6wx4WYG25beG7oxHbrzrAEO38Nu6hE",
+      "other": "h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY"
+    },
+    {
+      "key": "xs2:relay.example.com:8443:24pD5Dl-9lczoiWSwNrthQ:prod-k8s:S:h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY:zaXtGGBGS4LBlQuEorVBexaB8ni-P4It4g8O26qD7Xw",
+      "relay": "relay.example.com:8443",
+      "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
+      "name": "prod-k8s",
+      "rank": "S",
+      "seed": "h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY",
+      "other": "zaXtGGBGS4LBlQuEorVBexaB8ni-P4It4g8O26qD7Xw"
+    },
+    {
+      "key": "xs2:relay.example.com:24pD5Dl-9lczoiWSwNrthQ:prod-k8s:A:m3CgF4cCdgohx6wx4WYG25beG7oxHbrzrAEO38Nu6hE:h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY",
+      "relay": "relay.example.com",
+      "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
+      "name": "prod-k8s",
+      "rank": "A",
+      "seed": "m3CgF4cCdgohx6wx4WYG25beG7oxHbrzrAEO38Nu6hE",
+      "other": "h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY"
+    }
+  ]
+}

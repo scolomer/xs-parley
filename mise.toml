@@ -1,0 +1,79 @@
+[tools]
+go = "1.27.3"
+bun = "1.4.4"
+
+[tasks."relay:build"]
+description = "Build the relay binary into bin/xshell-relay"
+dir = "relay"
+run = "go build -o ../bin/xshell-relay ./cmd/xshell-relay"
+
+[tasks."extension:build"]
+description = "Install the extension dependencies and type-check it (omp loads the TypeScript sources directly)"
+dir = "extension"
+run = [
+  "bun install --frozen-lockfile",
+  "bun run typecheck",
+]
+
+[tasks.build]
+description = "Build the relay and the extension"
+depends = ["relay:build", "extension:build"]
+
+[tasks."extension:install"]
+description = "Link the extension into omp (user scope); edits to the sources apply at the next omp start"
+depends = ["extension:build"]
+run = "omp install {{config_root}}/extension"
+
+[tasks."relay:install"]
+description = "Install the relay as a local launchd agent (127.0.0.1:8080 unless XSHELL_LISTEN is set); restarts it if already installed"
+depends = ["relay:build"]
+run = '''
+set -eu
+
+label=omp.xshell.relay
+listen=${XSHELL_LISTEN:-127.0.0.1:8080}
+binary="$HOME/.local/bin/xshell-relay"
+plist="$HOME/Library/LaunchAgents/$label.plist"
+log="$HOME/Library/Logs/xshell-relay.log"
+domain="gui/$(id -u)"
+
+mkdir -p "$(dirname "$binary")" "$(dirname "$plist")" "$(dirname "$log")"
+install -m 0755 "{{config_root}}/bin/xshell-relay" "$binary"
+
+cat > "$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$label</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$binary</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>XSHELL_LISTEN</key><string>$listen</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$log</string>
+  <key>StandardErrorPath</key><string>$log</string>
+</dict>
+</plist>
+EOF
+plutil -lint -s "$plist"
+
+launchctl bootout "$domain/$label" 2>/dev/null || true
+launchctl bootstrap "$domain" "$plist"
+
+for _ in $(seq 1 50); do
+  if curl -fsS "http://$listen/healthz" >/dev/null 2>&1; then
+    echo "xshell-relay ($label) en écoute sur $listen ; journal : $log"
+    echo "Côté omp : /xshell create <nom> --relay $listen --notls"
+    exit 0
+  fi
+  sleep 0.1
+done
+echo "xshell-relay ne répond pas sur http://$listen/healthz ; voir $log" >&2
+exit 1
+'''
