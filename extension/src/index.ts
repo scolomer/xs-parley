@@ -1,5 +1,5 @@
 /**
- * xshell — omp extension (see SPEC.md): delegate actions to other omp sessions through an end-to-end encrypted
+ * xshell — omp extension (see doc/SPEC.md): delegate actions to other omp sessions through an end-to-end encrypted
  * relay. This file only wires omp events to `XshellSession`.
  *
  * Process-level state: extension factories are re-bound to every subagent session, module variables are shared.

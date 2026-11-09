@@ -1,5 +1,5 @@
 /**
- * Generates the fixed cross-language test vectors in `protocol/vectors/*.json`.
+ * Generates the fixed cross-language test vectors in `doc/protocol/vectors/*.json`.
  *
  * Every secret and nonce is derived from a constant label, so the output is
  * byte-for-byte reproducible (Ed25519 signatures are deterministic; HPKE uses
@@ -226,7 +226,7 @@ export async function buildAllVectors(): Promise<Record<VectorName, unknown>> {
 	};
 }
 
-export const VECTORS_DIR = new URL("../../protocol/vectors/", import.meta.url);
+export const VECTORS_DIR = new URL("../../doc/protocol/vectors/", import.meta.url);
 
 export function serializeVector(value: unknown): string {
 	return `${JSON.stringify(value, null, 2)}\n`;
@@ -237,6 +237,6 @@ if (import.meta.main) {
 	const all = await buildAllVectors();
 	for (const name of VECTOR_FILES) {
 		writeFileSync(new URL(`${name}.json`, VECTORS_DIR), serializeVector(all[name]));
-		console.log(`protocol/vectors/${name}.json`);
+		console.log(`doc/protocol/vectors/${name}.json`);
 	}
 }

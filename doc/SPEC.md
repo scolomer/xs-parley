@@ -334,8 +334,9 @@ Boîte aux lettres et livraison différée ; annulation distante ; progression e
 
 ```text
 omp-xshell/
-  SPEC.md
-  protocol/          # schéma JSON des trames v1 + vecteurs de test partagés
+  doc/
+    SPEC.md
+    protocol/        # schéma JSON des trames v1 + vecteurs de test partagés
   relay/             # module Go : cmd/xshell-relay, internal/{hub,ws,proto,metrics}, Dockerfile, fly.toml
   extension/         # paquet Bun, "omp": {"extensions": ["./src/index.ts"]}
     src/{index,session,commands,tools,crypto,keys,transport,inbox,audit,store}.ts

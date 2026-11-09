@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/scolomer/omp-xshell/protocol/frames.schema.json",
+  "$id": "https://github.com/scolomer/omp-xshell/doc/protocol/frames.schema.json",
   "title": "xshell relay frames v1",
   "description": "Frames exchanged between an xshell client and the relay (SPEC §6.3). One frame is one text WebSocket message holding a UTF-8 JSON object of at most 65536 bytes. Members not listed here are ignored by the receiver, so objects accept additional properties. The root accepts a client-to-relay frame (C→R) or a relay-to-client frame (R→C); validate against #/$defs/clientFrame or #/$defs/serverFrame to know the direction.",
   "oneOf": [
