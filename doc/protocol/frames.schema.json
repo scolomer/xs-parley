@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/scolomer/omp-xshell/doc/protocol/frames.schema.json",
-  "title": "xshell relay frames v1",
-  "description": "Frames exchanged between an xshell client and the relay (SPEC §6.3). One frame is one text WebSocket message holding a UTF-8 JSON object of at most 65536 bytes. Members not listed here are ignored by the receiver, so objects accept additional properties. The root accepts a client-to-relay frame (C→R) or a relay-to-client frame (R→C); validate against #/$defs/clientFrame or #/$defs/serverFrame to know the direction.",
+  "$id": "https://github.com/scolomer/xs-parley/doc/protocol/frames.schema.json",
+  "title": "xs-parley relay frames v1",
+  "description": "Frames exchanged between an xs-parley client and the relay (SPEC §6.3). One frame is one text WebSocket message holding a UTF-8 JSON object of at most 65536 bytes. Members not listed here are ignored by the receiver, so objects accept additional properties. The root accepts a client-to-relay frame (C→R) or a relay-to-client frame (R→C); validate against #/$defs/clientFrame or #/$defs/serverFrame to know the direction.",
   "oneOf": [
     { "$ref": "#/$defs/clientFrame" },
     { "$ref": "#/$defs/serverFrame" }
@@ -17,7 +17,7 @@
       "type": "string",
       "pattern": "^[A-Za-z0-9_-]{1,64}$"
     },
-    "xshellId": {
+    "parleyId": {
       "description": "128 random bits, base64url without padding.",
       "type": "string",
       "pattern": "^[A-Za-z0-9_-]{22}$"
@@ -41,7 +41,7 @@
       "enum": ["offline", "not_joined", "replaced", "bad_frame", "too_large", "no_invite", "timeout"]
     },
     "inviteId": {
-      "description": "Invitation identifier derived from the invitation code (SPEC §6.3), 128 bits, base64url without padding. Same shape as xshell_id; the relay never sees the code itself.",
+      "description": "Invitation identifier derived from the invitation code (SPEC §6.3), 128 bits, base64url without padding. Same shape as parley_id; the relay never sees the code itself.",
       "type": "string",
       "pattern": "^[A-Za-z0-9_-]{22}$"
     },
@@ -95,49 +95,49 @@
     },
 
     "join": {
-      "description": "C→R. Registers (xshell_id, fp) → (connection, cert_box). Another connection holding the pair is replaced (it receives error replaced); the same connection only replaces cert_box. Response: ok. The other members receive presence online.",
+      "description": "C→R. Registers (parley_id, fp) → (connection, cert_box). Another connection holding the pair is replaced (it receives error replaced); the same connection only replaces cert_box. Response: ok. The other members receive presence online.",
       "type": "object",
-      "required": ["v", "t", "id", "xshell_id", "fp", "cert_box"],
+      "required": ["v", "t", "id", "parley_id", "fp", "cert_box"],
       "properties": {
         "v": { "$ref": "#/$defs/version" },
         "t": { "const": "join" },
         "id": { "$ref": "#/$defs/id" },
-        "xshell_id": { "$ref": "#/$defs/xshellId" },
+        "parley_id": { "$ref": "#/$defs/parleyId" },
         "fp": { "$ref": "#/$defs/fp" },
         "cert_box": { "$ref": "#/$defs/certBox" }
       }
     },
     "leave": {
-      "description": "C→R. Removes the connection from the xshell. Requires a prior join (else error not_joined). Response: ok.",
+      "description": "C→R. Removes the connection from the parley. Requires a prior join (else error not_joined). Response: ok.",
       "type": "object",
-      "required": ["v", "t", "id", "xshell_id"],
+      "required": ["v", "t", "id", "parley_id"],
       "properties": {
         "v": { "$ref": "#/$defs/version" },
         "t": { "const": "leave" },
         "id": { "$ref": "#/$defs/id" },
-        "xshell_id": { "$ref": "#/$defs/xshellId" }
+        "parley_id": { "$ref": "#/$defs/parleyId" }
       }
     },
     "list": {
       "description": "C→R. Requires a prior join (else error not_joined). Response: members, the requester included.",
       "type": "object",
-      "required": ["v", "t", "id", "xshell_id"],
+      "required": ["v", "t", "id", "parley_id"],
       "properties": {
         "v": { "$ref": "#/$defs/version" },
         "t": { "const": "list" },
         "id": { "$ref": "#/$defs/id" },
-        "xshell_id": { "$ref": "#/$defs/xshellId" }
+        "parley_id": { "$ref": "#/$defs/parleyId" }
       }
     },
     "send": {
       "description": "C→R. Routes env to the connected member declared as `to`. Requires a prior join (else error not_joined). Response: sent, or error offline.",
       "type": "object",
-      "required": ["v", "t", "id", "xshell_id", "to", "env"],
+      "required": ["v", "t", "id", "parley_id", "to", "env"],
       "properties": {
         "v": { "$ref": "#/$defs/version" },
         "t": { "const": "send" },
         "id": { "$ref": "#/$defs/id" },
-        "xshell_id": { "$ref": "#/$defs/xshellId" },
+        "parley_id": { "$ref": "#/$defs/parleyId" },
         "to": { "$ref": "#/$defs/fp" },
         "env": { "$ref": "#/$defs/envelope" }
       }
@@ -215,12 +215,12 @@
     "members": {
       "description": "R→C. Response to list: the connected members.",
       "type": "object",
-      "required": ["v", "t", "id", "xshell_id", "members"],
+      "required": ["v", "t", "id", "parley_id", "members"],
       "properties": {
         "v": { "$ref": "#/$defs/version" },
         "t": { "const": "members" },
         "id": { "$ref": "#/$defs/id" },
-        "xshell_id": { "$ref": "#/$defs/xshellId" },
+        "parley_id": { "$ref": "#/$defs/parleyId" },
         "members": {
           "type": "array",
           "items": {
@@ -245,7 +245,7 @@
       }
     },
     "error": {
-      "description": "R→C. `id` is present when the error answers a frame (and valid in it); absent for pushes such as replaced. `xshell_id` accompanies replaced. too_large is followed by the closing of the connection.",
+      "description": "R→C. `id` is present when the error answers a frame (and valid in it); absent for pushes such as replaced. `parley_id` accompanies replaced. too_large is followed by the closing of the connection.",
       "type": "object",
       "required": ["v", "t", "code", "message"],
       "properties": {
@@ -253,18 +253,18 @@
         "t": { "const": "error" },
         "id": { "$ref": "#/$defs/id" },
         "code": { "$ref": "#/$defs/errorCode" },
-        "xshell_id": { "$ref": "#/$defs/xshellId" },
+        "parley_id": { "$ref": "#/$defs/parleyId" },
         "message": { "type": "string" }
       }
     },
     "deliver": {
       "description": "R→C push. Envelope sent to this member, `env` exactly as the sender wrote it.",
       "type": "object",
-      "required": ["v", "t", "xshell_id", "env"],
+      "required": ["v", "t", "parley_id", "env"],
       "properties": {
         "v": { "$ref": "#/$defs/version" },
         "t": { "const": "deliver" },
-        "xshell_id": { "$ref": "#/$defs/xshellId" },
+        "parley_id": { "$ref": "#/$defs/parleyId" },
         "env": { "$ref": "#/$defs/envelope" }
       }
     },
@@ -293,13 +293,13 @@
       }
     },
     "presence": {
-      "description": "R→C push, to the other connected members of the xshell. online=true carries the member's cert_box; online=false carries none.",
+      "description": "R→C push, to the other connected members of the parley. online=true carries the member's cert_box; online=false carries none.",
       "type": "object",
-      "required": ["v", "t", "xshell_id", "fp", "online"],
+      "required": ["v", "t", "parley_id", "fp", "online"],
       "properties": {
         "v": { "$ref": "#/$defs/version" },
         "t": { "const": "presence" },
-        "xshell_id": { "$ref": "#/$defs/xshellId" },
+        "parley_id": { "$ref": "#/$defs/parleyId" },
         "fp": { "$ref": "#/$defs/fp" },
         "online": { "type": "boolean" },
         "cert_box": { "$ref": "#/$defs/certBox" }

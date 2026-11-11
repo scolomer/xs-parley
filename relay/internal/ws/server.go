@@ -12,8 +12,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/scolomer/omp-xshell/relay/internal/hub"
-	"github.com/scolomer/omp-xshell/relay/internal/metrics"
+	"github.com/scolomer/xs-parley/relay/internal/hub"
+	"github.com/scolomer/xs-parley/relay/internal/metrics"
 )
 
 // Config configures a Server.

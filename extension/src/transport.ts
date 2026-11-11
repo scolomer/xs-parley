@@ -1,6 +1,6 @@
 /**
  * Relay transport (§6.3, §7.5): one native WebSocket per distinct endpoint (`wss://<relai>/ws`, or `ws://` for an
- * xshell joined with `--notls`), request/response correlation by `id`, reconnection with exponential backoff.
+ * parley joined with `--notls`), request/response correlation by `id`, reconnection with exponential backoff.
  *
  * The transport knows nothing about ranks, certificates or envelopes: `env` and `cert_box` are opaque here.
  */
@@ -60,7 +60,7 @@ export interface MemberFrame {
 }
 
 export interface PresenceFrame {
-	xshell_id: string;
+	parley_id: string;
 	fp: string;
 	online: boolean;
 	cert_box?: string;
@@ -71,10 +71,10 @@ export interface TransportHandlers {
 	/** The connection to `endpoint` is open (first connection or reconnection). */
 	up(endpoint: string): void;
 	down(endpoint: string, reason: string): void;
-	deliver(endpoint: string, xshellId: string, env: unknown): void;
+	deliver(endpoint: string, parleyId: string, env: unknown): void;
 	presence(endpoint: string, frame: PresenceFrame): void;
-	/** Another connection took over this (xshell, fp). */
-	replaced(endpoint: string, xshellId: string): void;
+	/** Another connection took over this (parley, fp). */
+	replaced(endpoint: string, parleyId: string): void;
 	/** Connection-level problem worth showing the user (relay unreachable, error frame not tied to a request…). */
 	problem(endpoint: string, code: string, message: string): void;
 	/**
@@ -90,10 +90,10 @@ export interface Transport {
 	acquire(endpoint: string): void;
 	release(endpoint: string): void;
 	isUp(endpoint: string): boolean;
-	join(endpoint: string, xshellId: string, fp: string, certBox: string): Promise<void>;
-	leave(endpoint: string, xshellId: string): Promise<void>;
-	list(endpoint: string, xshellId: string): Promise<MemberFrame[]>;
-	send(endpoint: string, xshellId: string, to: string, env: unknown): Promise<void>;
+	join(endpoint: string, parleyId: string, fp: string, certBox: string): Promise<void>;
+	leave(endpoint: string, parleyId: string): Promise<void>;
+	list(endpoint: string, parleyId: string): Promise<MemberFrame[]>;
+	send(endpoint: string, parleyId: string, to: string, env: unknown): Promise<void>;
 	/** Invitations (§6.3): none of these needs a prior `join`. */
 	offer(endpoint: string, inviteId: string): Promise<void>;
 	withdraw(endpoint: string, inviteId: string): Promise<void>;
@@ -301,18 +301,18 @@ class Connection {
 		}
 		switch (f.t) {
 			case "deliver":
-				if (typeof f.xshell_id === "string") this.safe(h => h.deliver(this.endpoint, f.xshell_id as string, f.env));
+				if (typeof f.parley_id === "string") this.safe(h => h.deliver(this.endpoint, f.parley_id as string, f.env));
 				break;
 			case "presence":
-				if (typeof f.xshell_id === "string" && typeof f.fp === "string" && typeof f.online === "boolean") {
-					const presence: PresenceFrame = { xshell_id: f.xshell_id, fp: f.fp, online: f.online };
+				if (typeof f.parley_id === "string" && typeof f.fp === "string" && typeof f.online === "boolean") {
+					const presence: PresenceFrame = { parley_id: f.parley_id, fp: f.fp, online: f.online };
 					if (typeof f.cert_box === "string") presence.cert_box = f.cert_box;
 					this.safe(h => h.presence(this.endpoint, presence));
 				}
 				break;
 			case "error":
-				if (f.code === "replaced" && typeof f.xshell_id === "string") {
-					this.safe(h => h.replaced(this.endpoint, f.xshell_id as string));
+				if (f.code === "replaced" && typeof f.parley_id === "string") {
+					this.safe(h => h.replaced(this.endpoint, f.parley_id as string));
 				} else {
 					this.problem(String(f.code ?? "error"), String(f.message ?? f.code ?? "erreur du relai"));
 				}
@@ -412,16 +412,16 @@ export class RelayTransport implements Transport {
 		return entry.conn;
 	}
 
-	async join(endpoint: string, xshellId: string, fp: string, certBox: string): Promise<void> {
-		await this.conn(endpoint).request("join", { xshell_id: xshellId, fp, cert_box: certBox });
+	async join(endpoint: string, parleyId: string, fp: string, certBox: string): Promise<void> {
+		await this.conn(endpoint).request("join", { parley_id: parleyId, fp, cert_box: certBox });
 	}
 
-	async leave(endpoint: string, xshellId: string): Promise<void> {
-		await this.conn(endpoint).request("leave", { xshell_id: xshellId });
+	async leave(endpoint: string, parleyId: string): Promise<void> {
+		await this.conn(endpoint).request("leave", { parley_id: parleyId });
 	}
 
-	async list(endpoint: string, xshellId: string): Promise<MemberFrame[]> {
-		const frame = await this.conn(endpoint).request("list", { xshell_id: xshellId });
+	async list(endpoint: string, parleyId: string): Promise<MemberFrame[]> {
+		const frame = await this.conn(endpoint).request("list", { parley_id: parleyId });
 		const members = Array.isArray(frame.members) ? frame.members : [];
 		const out: MemberFrame[] = [];
 		for (const m of members) {
@@ -430,8 +430,8 @@ export class RelayTransport implements Transport {
 		return out;
 	}
 
-	async send(endpoint: string, xshellId: string, to: string, env: unknown): Promise<void> {
-		await this.conn(endpoint).request("send", { xshell_id: xshellId, to, env });
+	async send(endpoint: string, parleyId: string, to: string, env: unknown): Promise<void> {
+		await this.conn(endpoint).request("send", { parley_id: parleyId, to, env });
 	}
 
 	async offer(endpoint: string, inviteId: string): Promise<void> {

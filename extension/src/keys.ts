@@ -1,6 +1,6 @@
 /**
  * Member identity and key lifecycle (§3, §4.2): per-session Ed25519 identity, ephemeral X25519 pairs with
- * rotation, memberships (a session's view of one joined xshell), peer certificate cache.
+ * rotation, memberships (a session's view of one joined parley), peer certificate cache.
  */
 import {
 	b64uDecode,
@@ -15,7 +15,7 @@ import {
 	type KemPair,
 	openCertBox,
 	type Rank,
-	type ShellKey,
+	type ParleyKey,
 	type SignPair,
 	signCert,
 	signPairFromSeed,
@@ -140,7 +140,7 @@ export interface PeerView {
 	online: boolean;
 }
 
-/** Certificates of the other members of one xshell (§4.2: cache) plus their current presence. */
+/** Certificates of the other members of one parley (§4.2: cache) plus their current presence. */
 export class PeerBook {
 	private readonly certs = new Map<string, Cert>();
 	private readonly online = new Set<string>();
@@ -222,15 +222,15 @@ export class PeerBook {
 
 // --- membership -------------------------------------------------------------------------------------------
 
-/** A session's view of one joined xshell. */
+/** A session's view of one joined parley. */
 export interface Membership {
-	xshellId: string;
+	parleyId: string;
 	name: string;
 	relay: string;
 	/** WebSocket URL of the relay (`relayUrl`): identifies the transport connection. */
 	endpoint: string;
 	fp: string;
-	key: ShellKey;
+	key: ParleyKey;
 	alias: string;
 	/** The alias follows the omp session name (no `--as` given); a rename republishes the certificate. */
 	autoAlias: boolean;
@@ -250,10 +250,10 @@ export function membershipGroupKey(m: Membership): Uint8Array {
 	return m.kGrp;
 }
 
-/** Decrypts and validates a `cert_box` received from the relay (§4.2). Throws `XshellCryptoError`. */
+/** Decrypts and validates a `cert_box` received from the relay (§4.2). Throws `ParleyCryptoError`. */
 export function readCertBox(m: Membership, fpAnnounced: string, box: string, now: Date): Cert {
-	const raw = openCertBox(membershipGroupKey(m), m.xshellId, box);
-	return verifyCert(raw, m.key, m.xshellId, fpAnnounced, now);
+	const raw = openCertBox(membershipGroupKey(m), m.parleyId, box);
+	return verifyCert(raw, m.key, m.parleyId, fpAnnounced, now);
 }
 
 /** Signs a fresh certificate for `m` carrying `kemPub` (§3, §4.2). */

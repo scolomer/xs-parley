@@ -1,4 +1,4 @@
-// Package hub holds the relay state: xshell_id → fp → (connection, cert_box).
+// Package hub holds the relay state: parley_id → fp → (connection, cert_box).
 //
 // It implements the semantics of SPEC §6.3 and knows nothing about
 // WebSockets: a Session is an outbound queue drained by one writer goroutine
@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/scolomer/omp-xshell/relay/internal/proto"
+	"github.com/scolomer/xs-parley/relay/internal/proto"
 )
 
 // Error is a protocol error to report to the client that caused it.
@@ -37,7 +37,7 @@ type Session struct {
 	out  chan []byte
 	kill func()
 
-	// joined maps xshell_id → declared fp; guarded by Hub.mu.
+	// joined maps parley_id → declared fp; guarded by Hub.mu.
 	joined map[string]string
 	// offers is the set of invite_ids this connection offers, and claims the
 	// pending claims it takes part in (as claimant or holder); both guarded
@@ -76,9 +76,9 @@ type member struct {
 // Hub is the in-memory registry. A single mutex guards it: every operation
 // is a few map accesses and non-blocking queue pushes.
 type Hub struct {
-	rec    Recorder
-	mu     sync.Mutex
-	shells map[string]map[string]*member // xshell_id → fp → member
+	rec     Recorder
+	mu      sync.Mutex
+	parleys map[string]map[string]*member // parley_id → fp → member
 
 	claimTimeout time.Duration
 	offers       map[string]*Session      // invite_id → offering connection
@@ -97,7 +97,7 @@ func WithClaimTimeout(d time.Duration) Option {
 // New returns an empty hub.
 func New(rec Recorder, opts ...Option) *Hub {
 	h := &Hub{
-		rec: rec, shells: map[string]map[string]*member{},
+		rec: rec, parleys: map[string]map[string]*member{},
 		claimTimeout: DefaultClaimTimeout,
 		offers:       map[string]*Session{}, claims: map[string]*pendingClaim{},
 	}
@@ -125,66 +125,66 @@ func (h *Hub) Refuse(s *Session, id string, e *Error) {
 }
 
 func notJoined() *Error {
-	return &Error{proto.CodeNotJoined, "cette connexion n'a pas rejoint cette xshell"}
+	return &Error{proto.CodeNotJoined, "cette connexion n'a pas rejoint cette parley"}
 }
 
-// Join registers (xshellID, fp) → (s, certBox).
+// Join registers (parleyID, fp) → (s, certBox).
 //
 //   - held by another connection: that connection is replaced and told so;
 //   - held by s itself: only the cert_box changes (kem_pub renewal);
-//   - s was already a member of the xshell under another fp: that membership
+//   - s was already a member of the parley under another fp: that membership
 //     is left first (presence offline), since a connection is one member.
 //
 // In every case the other members receive presence online with the new
 // cert_box.
-func (h *Hub) Join(s *Session, xshellID, fp, certBox string) {
+func (h *Hub) Join(s *Session, parleyID, fp, certBox string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if previous, ok := s.joined[xshellID]; ok && previous != fp {
-		h.removeLocked(s, xshellID, previous)
+	if previous, ok := s.joined[parleyID]; ok && previous != fp {
+		h.removeLocked(s, parleyID, previous)
 	}
-	members := h.shells[xshellID]
+	members := h.parleys[parleyID]
 	if members == nil {
 		members = map[string]*member{}
-		h.shells[xshellID] = members
+		h.parleys[parleyID] = members
 	}
 	if old := members[fp]; old != nil && old.sess != s {
-		delete(old.sess.joined, xshellID)
-		s.log.Info("connexion remplacée", "xshell_id", xshellID, "fp", fp)
-		h.Push(old.sess, proto.TypeError, proto.Error(proto.CodeReplaced, "", xshellID,
+		delete(old.sess.joined, parleyID)
+		s.log.Info("connexion remplacée", "parley_id", parleyID, "fp", fp)
+		h.Push(old.sess, proto.TypeError, proto.Error(proto.CodeReplaced, "", parleyID,
 			"empreinte reprise par une autre connexion"))
 		if h.rec != nil {
 			h.rec.Refusal(proto.CodeReplaced)
 		}
 	} else if old == nil {
-		s.log.Info("membre en ligne", "xshell_id", xshellID, "fp", fp)
+		s.log.Info("membre en ligne", "parley_id", parleyID, "fp", fp)
 	}
 	members[fp] = &member{sess: s, certBox: certBox}
-	s.joined[xshellID] = fp
-	h.broadcastLocked(members, fp, proto.Presence(xshellID, fp, true, certBox))
+	s.joined[parleyID] = fp
+	h.broadcastLocked(members, fp, proto.Presence(parleyID, fp, true, certBox))
 }
 
-// Leave removes s from the xshell.
-func (h *Hub) Leave(s *Session, xshellID string) *Error {
+// Leave removes s from the parley.
+func (h *Hub) Leave(s *Session, parleyID string) *Error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	fp, ok := s.joined[xshellID]
+	fp, ok := s.joined[parleyID]
 	if !ok {
 		return notJoined()
 	}
-	h.removeLocked(s, xshellID, fp)
+	h.removeLocked(s, parleyID, fp)
 	return nil
 }
 
-// Members lists the connected members of the xshell, s included, ordered by fp.
-func (h *Hub) Members(s *Session, xshellID string) ([]proto.Member, *Error) {
+// Members lists the connected members of the parley, s included, ordered by fp.
+func (h *Hub) Members(s *Session, parleyID string) ([]proto.Member, *Error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if _, ok := s.joined[xshellID]; !ok {
+	if _, ok := s.joined[parleyID]; !ok {
 		return nil, notJoined()
 	}
-	members := h.shells[xshellID]
+	members := h.parleys[parleyID]
 	list := make([]proto.Member, 0, len(members))
 	for fp, m := range members {
 		list = append(list, proto.Member{FP: fp, CertBox: m.certBox})
@@ -201,45 +201,45 @@ func (h *Hub) Members(s *Session, xshellID string) ([]proto.Member, *Error) {
 	return list, nil
 }
 
-// Route delivers env, untouched, to the member of the xshell declared as to.
-func (h *Hub) Route(s *Session, xshellID, to string, env []byte) *Error {
+// Route delivers env, untouched, to the member of the parley declared as to.
+func (h *Hub) Route(s *Session, parleyID, to string, env []byte) *Error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	from, ok := s.joined[xshellID]
+	from, ok := s.joined[parleyID]
 	if !ok {
 		return notJoined()
 	}
-	target := h.shells[xshellID][to]
-	if target == nil || !h.Push(target.sess, proto.TypeDeliver, proto.Deliver(xshellID, env)) {
-		s.log.Info("destinataire hors ligne", "xshell_id", xshellID, "fp", from, "to", to)
+	target := h.parleys[parleyID][to]
+	if target == nil || !h.Push(target.sess, proto.TypeDeliver, proto.Deliver(parleyID, env)) {
+		s.log.Info("destinataire hors ligne", "parley_id", parleyID, "fp", from, "to", to)
 		return &Error{proto.CodeOffline, "destinataire hors ligne"}
 	}
 	return nil
 }
 
-// Disconnect removes s from every xshell it joined, announcing it offline,
+// Disconnect removes s from every parley it joined, announcing it offline,
 // and drops its invitation offers and claims.
 func (h *Hub) Disconnect(s *Session) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.dropInvitesLocked(s)
-	for xshellID, fp := range s.joined {
-		h.removeLocked(s, xshellID, fp)
+	for parleyID, fp := range s.joined {
+		h.removeLocked(s, parleyID, fp)
 	}
 }
 
-func (h *Hub) removeLocked(s *Session, xshellID, fp string) {
-	members := h.shells[xshellID]
-	delete(s.joined, xshellID)
+func (h *Hub) removeLocked(s *Session, parleyID, fp string) {
+	members := h.parleys[parleyID]
+	delete(s.joined, parleyID)
 	if m := members[fp]; m == nil || m.sess != s {
 		return
 	}
 	delete(members, fp)
 	if len(members) == 0 {
-		delete(h.shells, xshellID)
+		delete(h.parleys, parleyID)
 	}
-	s.log.Info("membre hors ligne", "xshell_id", xshellID, "fp", fp)
-	h.broadcastLocked(members, fp, proto.Presence(xshellID, fp, false, ""))
+	s.log.Info("membre hors ligne", "parley_id", parleyID, "fp", fp)
+	h.broadcastLocked(members, fp, proto.Presence(parleyID, fp, false, ""))
 }
 
 // broadcastLocked pushes frame to every member except the one named except.

@@ -14,9 +14,9 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/scolomer/omp-xshell/relay/internal/hub"
-	"github.com/scolomer/omp-xshell/relay/internal/metrics"
-	"github.com/scolomer/omp-xshell/relay/internal/ws"
+	"github.com/scolomer/xs-parley/relay/internal/hub"
+	"github.com/scolomer/xs-parley/relay/internal/metrics"
+	"github.com/scolomer/xs-parley/relay/internal/ws"
 )
 
 const (
@@ -136,17 +136,17 @@ func (c *client) expect(want frame) frame {
 	return got
 }
 
-func (c *client) join(xshellID, fingerprint, box string) {
+func (c *client) join(parleyID, fingerprint, box string) {
 	c.t.Helper()
-	c.send(frame{"v": 1, "t": "join", "id": "j", "xshell_id": xshellID, "fp": fingerprint, "cert_box": box})
+	c.send(frame{"v": 1, "t": "join", "id": "j", "parley_id": parleyID, "fp": fingerprint, "cert_box": box})
 	c.expect(frame{"t": "ok", "id": "j"})
 }
 
 // probe checks that no frame is pending: the answer to a list on a joined
-// xshell comes next, after everything queued before it.
-func (c *client) probe(xshellID string) frame {
+// parley comes next, after everything queued before it.
+func (c *client) probe(parleyID string) frame {
 	c.t.Helper()
-	c.send(frame{"v": 1, "t": "list", "id": "probe", "xshell_id": xshellID})
+	c.send(frame{"v": 1, "t": "list", "id": "probe", "parley_id": parleyID})
 	return c.expect(frame{"t": "members", "id": "probe"})
 }
 
@@ -166,8 +166,8 @@ func (c *client) expectClosed() websocket.StatusCode {
 	}
 }
 
-func sendFrame(id, xshellID, to, env string) string {
-	return fmt.Sprintf(`{"v":1,"t":"send","id":%q,"xshell_id":%q,"to":%q,"env":%s}`, id, xshellID, to, env)
+func sendFrame(id, parleyID, to, env string) string {
+	return fmt.Sprintf(`{"v":1,"t":"send","id":%q,"parley_id":%q,"to":%q,"env":%s}`, id, parleyID, to, env)
 }
 
 // --- hub semantics over the wire -------------------------------------------
@@ -177,7 +177,7 @@ func TestRoutingDeliversEnvelopeByteForByte(t *testing.T) {
 	a, b := r.dial(t), r.dial(t)
 	a.join(xid1, fpA, "boxA")
 	b.join(xid1, fpB, "boxB")
-	a.expect(frame{"t": "presence", "xshell_id": xid1, "fp": fpB, "online": true, "cert_box": "boxB"})
+	a.expect(frame{"t": "presence", "parley_id": xid1, "fp": fpB, "online": true, "cert_box": "boxB"})
 
 	// Whitespace, key order, <>&, escapes, number forms and an unknown member
 	// must all survive untouched.
@@ -185,7 +185,7 @@ func TestRoutingDeliversEnvelopeByteForByte(t *testing.T) {
 	a.sendRaw(sendFrame("s1", xid1, fpB, env))
 	a.expect(frame{"t": "sent", "id": "s1"})
 
-	want := `{"v":1,"t":"deliver","xshell_id":"` + xid1 + `","env":` + env + `}`
+	want := `{"v":1,"t":"deliver","parley_id":"` + xid1 + `","env":` + env + `}`
 	if got := string(b.recvRaw()); got != want {
 		t.Fatalf("deliver =\n%s\nwant\n%s", got, want)
 	}
@@ -218,14 +218,14 @@ func TestOfflineAndDisconnectPresence(t *testing.T) {
 	a.sendRaw(sendFrame("s1", xid1, fpC, `{}`))
 	a.expect(frame{"t": "error", "id": "s1", "code": "offline"})
 
-	// A fingerprint joined on another xshell only.
+	// A fingerprint joined on another parley only.
 	other := r.dial(t)
 	other.join(xid2, fpC, "boxC")
 	a.sendRaw(sendFrame("s2", xid1, fpC, `{}`))
 	a.expect(frame{"t": "error", "id": "s2", "code": "offline"})
 
 	_ = b.ws.CloseNow()
-	pres := a.expect(frame{"t": "presence", "xshell_id": xid1, "fp": fpB, "online": false})
+	pres := a.expect(frame{"t": "presence", "parley_id": xid1, "fp": fpB, "online": false})
 	if _, has := pres["cert_box"]; has {
 		t.Fatalf("offline presence carries a cert_box: %v", pres)
 	}
@@ -233,7 +233,7 @@ func TestOfflineAndDisconnectPresence(t *testing.T) {
 	a.expect(frame{"t": "error", "id": "s3", "code": "offline"})
 }
 
-func TestDisconnectAnnouncesOfflineOnEveryXshell(t *testing.T) {
+func TestDisconnectAnnouncesOfflineOnEveryParley(t *testing.T) {
 	r := newRelay(t)
 	a, b := r.dial(t), r.dial(t)
 	a.join(xid1, fpA, "boxA")
@@ -245,8 +245,8 @@ func TestDisconnectAnnouncesOfflineOnEveryXshell(t *testing.T) {
 	a2.expect(frame{"t": "presence", "fp": fpB, "online": true})
 
 	_ = b.ws.CloseNow()
-	a.expect(frame{"t": "presence", "xshell_id": xid1, "fp": fpB, "online": false})
-	a2.expect(frame{"t": "presence", "xshell_id": xid2, "fp": fpB, "online": false})
+	a.expect(frame{"t": "presence", "parley_id": xid1, "fp": fpB, "online": false})
+	a2.expect(frame{"t": "presence", "parley_id": xid2, "fp": fpB, "online": false})
 }
 
 func TestLeaveAndList(t *testing.T) {
@@ -262,14 +262,14 @@ func TestLeaveAndList(t *testing.T) {
 		t.Fatalf("members = %v, want both, the requester included", members)
 	}
 	first := members[0].(map[string]any)
-	if first["fp"] != fpA || first["cert_box"] != "boxA" || list["xshell_id"] != xid1 {
+	if first["fp"] != fpA || first["cert_box"] != "boxA" || list["parley_id"] != xid1 {
 		t.Fatalf("members = %v", list)
 	}
 
-	b.send(frame{"v": 1, "t": "leave", "id": "l1", "xshell_id": xid1})
+	b.send(frame{"v": 1, "t": "leave", "id": "l1", "parley_id": xid1})
 	b.expect(frame{"t": "ok", "id": "l1"})
 	a.expect(frame{"t": "presence", "fp": fpB, "online": false})
-	b.send(frame{"v": 1, "t": "list", "id": "q1", "xshell_id": xid1})
+	b.send(frame{"v": 1, "t": "list", "id": "q1", "parley_id": xid1})
 	b.expect(frame{"t": "error", "id": "q1", "code": "not_joined"})
 
 	// Leaving did not disconnect: B can join again.
@@ -286,14 +286,14 @@ func TestJoinReplacesAnotherConnection(t *testing.T) {
 
 	second := r.dial(t)
 	second.join(xid1, fpB, "box2")
-	replaced := first.expect(frame{"t": "error", "code": "replaced", "xshell_id": xid1})
+	replaced := first.expect(frame{"t": "error", "code": "replaced", "parley_id": xid1})
 	if _, has := replaced["id"]; has {
 		t.Fatalf("replaced carries an id: %v", replaced)
 	}
 	observer.expect(frame{"t": "presence", "fp": fpB, "online": true, "cert_box": "box2"})
 
 	// The replaced connection is no longer a member...
-	first.send(frame{"v": 1, "t": "list", "id": "q", "xshell_id": xid1})
+	first.send(frame{"v": 1, "t": "list", "id": "q", "parley_id": xid1})
 	first.expect(frame{"t": "error", "id": "q", "code": "not_joined"})
 	// ...and its departure does not take the fingerprint offline.
 	_ = first.ws.CloseNow()
@@ -323,9 +323,9 @@ func TestRejoinOnSameConnectionUpdatesCertBox(t *testing.T) {
 func TestNotJoined(t *testing.T) {
 	r := newRelay(t)
 	c := r.dial(t)
-	c.send(frame{"v": 1, "t": "list", "id": "q1", "xshell_id": xid1})
+	c.send(frame{"v": 1, "t": "list", "id": "q1", "parley_id": xid1})
 	c.expect(frame{"t": "error", "id": "q1", "code": "not_joined"})
-	c.send(frame{"v": 1, "t": "leave", "id": "l1", "xshell_id": xid1})
+	c.send(frame{"v": 1, "t": "leave", "id": "l1", "parley_id": xid1})
 	c.expect(frame{"t": "error", "id": "l1", "code": "not_joined"})
 	c.sendRaw(sendFrame("s1", xid1, fpA, `{}`))
 	c.expect(frame{"t": "error", "id": "s1", "code": "not_joined"})
@@ -411,7 +411,7 @@ func TestBadFrames(t *testing.T) {
 	c.join(xid1, fpA, "boxA")
 
 	valid := func(mutate func(frame)) string {
-		f := frame{"v": 1, "t": "join", "id": "j9", "xshell_id": xid2, "fp": fpA, "cert_box": "box"}
+		f := frame{"v": 1, "t": "join", "id": "j9", "parley_id": xid2, "fp": fpA, "cert_box": "box"}
 		mutate(f)
 		data, _ := json.Marshal(f)
 		return string(data)
@@ -423,9 +423,9 @@ func TestBadFrames(t *testing.T) {
 		{"json array", `[1]`, ""},
 		{"json null", `null`, ""},
 		{"json string", `"join"`, ""},
-		{"missing version", `{"t":"list","id":"q","xshell_id":"` + xid1 + `"}`, "q"},
-		{"version 2", `{"v":2,"t":"list","id":"q","xshell_id":"` + xid1 + `"}`, "q"},
-		{"version as string", `{"v":"1","t":"list","id":"q","xshell_id":"` + xid1 + `"}`, "q"},
+		{"missing version", `{"t":"list","id":"q","parley_id":"` + xid1 + `"}`, "q"},
+		{"version 2", `{"v":2,"t":"list","id":"q","parley_id":"` + xid1 + `"}`, "q"},
+		{"version as string", `{"v":"1","t":"list","id":"q","parley_id":"` + xid1 + `"}`, "q"},
 		{"missing type", `{"v":1,"id":"q"}`, "q"},
 		{"type as number", `{"v":1,"t":1,"id":"q"}`, "q"},
 		{"unknown type", `{"v":1,"t":"ping","id":"q"}`, "q"},
@@ -435,19 +435,19 @@ func TestBadFrames(t *testing.T) {
 		{"invalid id", valid(func(f frame) { f["id"] = "has space" }), ""},
 		{"id too long", valid(func(f frame) { f["id"] = strings.Repeat("a", 65) }), ""},
 		{"id not a string", valid(func(f frame) { f["id"] = 7 }), ""},
-		{"short xshell_id", valid(func(f frame) { f["xshell_id"] = "short" }), "j9"},
-		{"xshell_id alphabet", valid(func(f frame) { f["xshell_id"] = strings.Repeat("+", 22) }), "j9"},
+		{"short parley_id", valid(func(f frame) { f["parley_id"] = "short" }), "j9"},
+		{"parley_id alphabet", valid(func(f frame) { f["parley_id"] = strings.Repeat("+", 22) }), "j9"},
 		{"fp without prefix", valid(func(f frame) { f["fp"] = strings.Repeat("A", 46) }), "j9"},
 		{"fp too short", valid(func(f frame) { f["fp"] = "xs:AAAA" }), "j9"},
 		{"fp padded", valid(func(f frame) { f["fp"] = fpA + "=" }), "j9"},
 		{"missing cert_box", valid(func(f frame) { delete(f, "cert_box") }), "j9"},
 		{"empty cert_box", valid(func(f frame) { f["cert_box"] = "" }), "j9"},
 		{"cert_box not base64url", valid(func(f frame) { f["cert_box"] = "a+b/c=" }), "j9"},
-		{"send without env", `{"v":1,"t":"send","id":"s","xshell_id":"` + xid1 + `","to":"` + fpA + `"}`, "s"},
+		{"send without env", `{"v":1,"t":"send","id":"s","parley_id":"` + xid1 + `","to":"` + fpA + `"}`, "s"},
 		{"send env not an object", sendFrame("s", xid1, fpA, `"text"`), "s"},
 		{"send env null", sendFrame("s", xid1, fpA, `null`), "s"},
 		{"send env array", sendFrame("s", xid1, fpA, `[]`), "s"},
-		{"send invalid to", `{"v":1,"t":"send","id":"s","xshell_id":"` + xid1 + `","to":"nope","env":{}}`, "s"},
+		{"send invalid to", `{"v":1,"t":"send","id":"s","parley_id":"` + xid1 + `","to":"nope","env":{}}`, "s"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -473,7 +473,7 @@ func TestBadFrames(t *testing.T) {
 	})
 
 	t.Run("unknown members are ignored", func(t *testing.T) {
-		c.sendRaw(`{"v":1,"t":"list","id":"q","xshell_id":"` + xid1 + `","extra":{"a":[1]},"future":true}`)
+		c.sendRaw(`{"v":1,"t":"list","id":"q","parley_id":"` + xid1 + `","extra":{"a":[1]},"future":true}`)
 		c.expect(frame{"t": "members", "id": "q"})
 	})
 

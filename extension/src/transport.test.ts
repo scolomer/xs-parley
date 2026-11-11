@@ -41,7 +41,7 @@ function startServer(): TestServer {
 					if (f.invite_id === "gone") ws.send(JSON.stringify({ v: 1, t: "error", id: f.id, code: "no_invite", message: "no such invite" }));
 					else if (f.invite_id !== "slow") ws.send(JSON.stringify({ v: 1, t: "granted", id: f.id, box: `box-for-${f.invite_id}` }));
 				}
-				else if (f.t === "list") ws.send(JSON.stringify({ v: 1, t: "members", id: f.id, xshell_id: f.xshell_id, members: [{ fp: "xs:a", cert_box: "box" }, { bogus: true }] }));
+				else if (f.t === "list") ws.send(JSON.stringify({ v: 1, t: "members", id: f.id, parley_id: f.parley_id, members: [{ fp: "xs:a", cert_box: "box" }, { bogus: true }] }));
 				else if (f.t === "send") {
 					heldSends.push({ id: String(f.id) });
 					if (heldSends.length === 2) {
@@ -60,13 +60,13 @@ function startServer(): TestServer {
 
 function recorder() {
 	const events: string[] = [];
-	const delivered: { xshellId: string; env: unknown }[] = [];
+	const delivered: { parleyId: string; env: unknown }[] = [];
 	const problems: { code: string; message: string }[] = [];
 	const claims: { inviteId: string; claim: string; epk: string; req: string }[] = [];
 	const handlers: TransportHandlers = {
 		up: relay => events.push(`up:${relay}`),
 		down: relay => events.push(`down:${relay}`),
-		deliver: (_relay, xshellId, env) => void delivered.push({ xshellId, env }),
+		deliver: (_relay, parleyId, env) => void delivered.push({ parleyId, env }),
 		presence: (_r, f) => events.push(`presence:${f.fp}:${f.online}`),
 		replaced: (_r, id) => events.push(`replaced:${id}`),
 		problem: (_r, code, message) => void problems.push({ code, message }),
@@ -108,7 +108,7 @@ describe("RelayTransport against a real WebSocket server", () => {
 		expect(((results[1] as PromiseRejectedResult).reason as RelayError).code).toBe("offline");
 
 		const join = server.frames.find(f => f.t === "join")!;
-		expect(join).toMatchObject({ v: 1, xshell_id: "X".repeat(22), fp: `xs:${"A".repeat(43)}`, cert_box: "box" });
+		expect(join).toMatchObject({ v: 1, parley_id: "X".repeat(22), fp: `xs:${"A".repeat(43)}`, cert_box: "box" });
 		expect(typeof join.id).toBe("string");
 	});
 
@@ -122,13 +122,13 @@ describe("RelayTransport against a real WebSocket server", () => {
 		transport.acquire(relay);
 		await waitFor(() => transport.isUp(relay), "connection");
 		const [socket] = [...server.sockets];
-		socket!.send(JSON.stringify({ v: 1, t: "deliver", xshell_id: "X", env: { h: 1 } }));
-		socket!.send(JSON.stringify({ v: 1, t: "presence", xshell_id: "X", fp: "xs:p", online: true, cert_box: "b" }));
-		socket!.send(JSON.stringify({ v: 1, t: "error", code: "replaced", xshell_id: "X", message: "m" }));
+		socket!.send(JSON.stringify({ v: 1, t: "deliver", parley_id: "X", env: { h: 1 } }));
+		socket!.send(JSON.stringify({ v: 1, t: "presence", parley_id: "X", fp: "xs:p", online: true, cert_box: "b" }));
+		socket!.send(JSON.stringify({ v: 1, t: "error", code: "replaced", parley_id: "X", message: "m" }));
 		socket!.send(JSON.stringify({ v: 1, t: "frobnicate" }));
 		socket!.send("not json");
 		await waitFor(() => rec.delivered.length === 1 && rec.events.includes("replaced:X"), "pushes");
-		expect(rec.delivered[0]).toEqual({ xshellId: "X", env: { h: 1 } });
+		expect(rec.delivered[0]).toEqual({ parleyId: "X", env: { h: 1 } });
 		expect(rec.events).toContain("presence:xs:p:true");
 	});
 

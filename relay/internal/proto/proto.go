@@ -69,11 +69,11 @@ const EPKLen = 32
 
 var (
 	idRe       = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
-	xshellIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`)
+	parleyIDRe = regexp.MustCompile(`^[A-Za-z0-9_-]{22}$`)
 	fpRe       = regexp.MustCompile(`^xs:[A-Za-z0-9_-]{43}$`)
 	certBoxRe  = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
-	// invite_id has the same shape as xshell_id; claim has the shape of id.
-	inviteIDRe = xshellIDRe
+	// invite_id has the same shape as parley_id; claim has the shape of id.
+	inviteIDRe = parleyIDRe
 	claimRe    = idRe
 )
 
@@ -82,7 +82,7 @@ var (
 type Inbound struct {
 	Type     string
 	ID       string
-	XshellID string
+	ParleyID string
 	FP       string
 	CertBox  string
 	To       string
@@ -135,11 +135,11 @@ func Parse(data []byte) (Inbound, error) {
 	var needs []string
 	switch typ {
 	case TypeJoin:
-		needs = []string{"id", "xshell_id", "fp", "cert_box"}
+		needs = []string{"id", "parley_id", "fp", "cert_box"}
 	case TypeLeave, TypeList:
-		needs = []string{"id", "xshell_id"}
+		needs = []string{"id", "parley_id"}
 	case TypeSend:
-		needs = []string{"id", "xshell_id", "to", "env"}
+		needs = []string{"id", "parley_id", "to", "env"}
 	case TypeOffer, TypeWithdraw:
 		needs = []string{"id", "invite_id"}
 	case TypeClaim:
@@ -189,8 +189,8 @@ func (in *Inbound) set(members map[string]json.RawMessage, name string) error {
 	switch name {
 	case "id":
 		valid, dst = idRe.MatchString(value), &in.ID
-	case "xshell_id":
-		valid, dst = xshellIDRe.MatchString(value), &in.XshellID
+	case "parley_id":
+		valid, dst = parleyIDRe.MatchString(value), &in.ParleyID
 	case "fp", "to":
 		valid = fpRe.MatchString(value)
 		dst = &in.FP
@@ -258,48 +258,48 @@ func Sent(id string) []byte {
 }
 
 // MembersFrame encodes the members response.
-func MembersFrame(id, xshellID string, members []Member) []byte {
+func MembersFrame(id, parleyID string, members []Member) []byte {
 	if members == nil {
 		members = []Member{}
 	}
 	return marshal(struct {
 		header
 		ID       string   `json:"id"`
-		XshellID string   `json:"xshell_id"`
+		ParleyID string   `json:"parley_id"`
 		Members  []Member `json:"members"`
-	}{header{Version, TypeMembers}, id, xshellID, members})
+	}{header{Version, TypeMembers}, id, parleyID, members})
 }
 
-// Error encodes an error frame; id and xshellID are omitted when empty.
-func Error(code, id, xshellID, message string) []byte {
+// Error encodes an error frame; id and parleyID are omitted when empty.
+func Error(code, id, parleyID, message string) []byte {
 	return marshal(struct {
 		header
 		ID       string `json:"id,omitempty"`
 		Code     string `json:"code"`
-		XshellID string `json:"xshell_id,omitempty"`
+		ParleyID string `json:"parley_id,omitempty"`
 		Message  string `json:"message"`
-	}{header{Version, TypeError}, id, code, xshellID, message})
+	}{header{Version, TypeError}, id, code, parleyID, message})
 }
 
 // Presence encodes a presence push; certBox is omitted when empty (offline).
-func Presence(xshellID, fp string, online bool, certBox string) []byte {
+func Presence(parleyID, fp string, online bool, certBox string) []byte {
 	return marshal(struct {
 		header
-		XshellID string `json:"xshell_id"`
+		ParleyID string `json:"parley_id"`
 		FP       string `json:"fp"`
 		Online   bool   `json:"online"`
 		CertBox  string `json:"cert_box,omitempty"`
-	}{header{Version, TypePresence}, xshellID, fp, online, certBox})
+	}{header{Version, TypePresence}, parleyID, fp, online, certBox})
 }
 
 // Deliver encodes a deliver push around env, copied byte for byte: going
-// through json.Marshal would compact it and escape <, > and &. xshellID is
+// through json.Marshal would compact it and escape <, > and &. parleyID is
 // validated by Parse and needs no escaping.
-func Deliver(xshellID string, env []byte) []byte {
+func Deliver(parleyID string, env []byte) []byte {
 	var b bytes.Buffer
 	b.Grow(len(env) + 80)
-	b.WriteString(`{"v":1,"t":"deliver","xshell_id":"`)
-	b.WriteString(xshellID)
+	b.WriteString(`{"v":1,"t":"deliver","parley_id":"`)
+	b.WriteString(parleyID)
 	b.WriteString(`","env":`)
 	b.Write(env)
 	b.WriteByte('}')

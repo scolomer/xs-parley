@@ -2,19 +2,19 @@
   "description": "fp = 'xs:' + base64url(SHA-256(raw Ed25519 public key))",
   "cases": [
     {
-      "sign_seed": "Ipe6Dgf_G2-emFznfhG1CwAVxqNBjDJzwoH9EAGoEDQ",
-      "sign_pub": "LHZKPitmbajMr3tXIVjdIx93aWXZH4cgKShG3pZ8b5U",
-      "fp": "xs:WlPFl4bROMLwrv9_QqiIxXtrclo8lUn4TYePLrJzyYw"
+      "sign_seed": "ZIlvXlFTyn4Nin649y1LgeabWpM6_UvHfZvdTfzwLVk",
+      "sign_pub": "ddVBtpKnwJU4bDQZ7XYj16tJgbPn80A-vtkJyaU8AjM",
+      "fp": "xs:tokhQumSTjTh1svZYiLzwNGj0TxKD1hR4OkdzC9ZG5s"
     },
     {
-      "sign_seed": "UTbFwxPCDAQbxaSGm6bQUE9N-sc2V6JSlnuDy__5ouw",
-      "sign_pub": "WZHQuuUvl0gIqqTH33psl6wTMAymc0zBb4JiXWxZZsQ",
-      "fp": "xs:dOGYIaBypi9R0mzsPDSsD3AWV3qlUr6lai2gsKz5pjg"
+      "sign_seed": "XEGQ7Nh_i8gevvOUF5wW9Gsdrg9sONhvOw43e14IK24",
+      "sign_pub": "_N2w7eaUqczKC3pgsMxWShh8ROMA5halMJWhFNfc2aA",
+      "fp": "xs:kSv0_p4Ie0-XQqK0ccIBmNn_-HhIuHKl9Qn8Ix3Q0nI"
     },
     {
-      "sign_seed": "m3CgF4cCdgohx6wx4WYG25beG7oxHbrzrAEO38Nu6hE",
-      "sign_pub": "zaXtGGBGS4LBlQuEorVBexaB8ni-P4It4g8O26qD7Xw",
-      "fp": "xs:-D-PnXxacdC8UOUl32nNX4AahE_DmO962WYOX5UtE2c"
+      "sign_seed": "pbCN3M51BvaEga3aHTYeWPKOj9tntW2QmEQ3Dm9bkDA",
+      "sign_pub": "qWcHYx2YZoZeHn1SSHjoEyoYETZcb8QwxRPsVZbdV54",
+      "fp": "xs:-Ed1uMSvzIBzliaYyBXwmcwJ0MXFU9wmYI4fPaj_iQk"
     }
   ]
 }

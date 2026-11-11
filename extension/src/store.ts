@@ -1,9 +1,9 @@
 /**
- * Local persistence (§7.5): `~/.omp/xshell/` (override with `XSHELL_HOME`).
+ * Local persistence (§7.5): `~/.omp/xs-parley/` (override with `XSP_HOME`).
  *
- *   keys/<fp>.key            Ed25519 identity of one omp session (0600)
- *   shells/<xshell_id>.json  xshell keys, aliases, roles, policies, signed certs, peer cert cache (0600)
- *   audit/<xshell_id>.jsonl  local audit trail (see audit.ts)
+ *   keys/<fp>.key             Ed25519 identity of one omp session (0600)
+ *   parleys/<parley_id>.json  parley keys, aliases, roles, policies, signed certs, peer cert cache (0600)
+ *   audit/<parley_id>.jsonl   local audit trail (see audit.ts)
  *
  * Directories are 0700, files 0600, writes are atomic (temp file + rename). All I/O is synchronous: the files
  * are tiny, and a synchronous read-modify-write cannot interleave with another handler of the same process.
@@ -23,9 +23,9 @@ export interface IdentityFile {
 	pub: string;
 }
 
-/** One membership (one omp session, identified by its fingerprint) in a xshell. */
+/** One membership (one omp session, identified by its fingerprint) in a parley. */
 export interface MemberRecord {
-	/** Formatted xshell key this session joined with (its rank is the key's rank). */
+	/** Formatted parley key this session joined with (its rank is the key's rank). */
 	key: string;
 	alias: string;
 	/** No `--as` at join: the alias follows the omp session name. */
@@ -36,24 +36,24 @@ export interface MemberRecord {
 	cert?: Cert;
 }
 
-export interface ShellFile {
+export interface ParleyFile {
 	v: 1;
-	xshell_id: string;
+	parley_id: string;
 	name: string;
 	relay: string;
 	/** Plain `ws://` to the relay (`--notls`); absent: `wss://`. */
 	notls?: true;
-	/** fp → membership; several local sessions may join the same xshell. */
+	/** fp → membership; several local sessions may join the same parley. */
 	members: Record<string, MemberRecord>;
 	/** fp → last valid certificate seen for that peer (§4.2). */
 	peers: Record<string, Cert>;
 }
 
-export const XSHELL_ID_RE = /^[A-Za-z0-9_-]{22}$/;
+export const PARLEY_ID_RE = /^[A-Za-z0-9_-]{22}$/;
 export const FP_RE = /^xs:[A-Za-z0-9_-]{43}$/;
 
 export function defaultRoot(): string {
-	return process.env.XSHELL_HOME || path.join(os.homedir(), ".omp", "xshell");
+	return process.env.XSP_HOME || path.join(os.homedir(), ".omp", "xs-parley");
 }
 
 function isNotFound(error: unknown): boolean {
@@ -133,52 +133,52 @@ export class Store {
 		this.writeFile(this.identityPath(fp), `${JSON.stringify(identity)}\n`);
 	}
 
-	// --- shells -------------------------------------------------------------------------------------------
+	// --- parleys -------------------------------------------------------------------------------------------
 
-	shellPath(xshellId: string): string {
-		if (!XSHELL_ID_RE.test(xshellId)) throw new Error("xshell_id invalide");
-		return path.join(this.dir("shells"), `${xshellId}.json`);
+	parleyPath(parleyId: string): string {
+		if (!PARLEY_ID_RE.test(parleyId)) throw new Error("parley_id invalide");
+		return path.join(this.dir("parleys"), `${parleyId}.json`);
 	}
 
-	readShell(xshellId: string): ShellFile | undefined {
-		const text = this.readText(this.shellPath(xshellId));
+	readParley(parleyId: string): ParleyFile | undefined {
+		const text = this.readText(this.parleyPath(parleyId));
 		if (text === undefined) return undefined;
-		const value = JSON.parse(text) as ShellFile;
-		if (value.v !== 1 || value.xshell_id !== xshellId) throw new Error(`fichier xshell illisible : ${xshellId}`);
+		const value = JSON.parse(text) as ParleyFile;
+		if (value.v !== 1 || value.parley_id !== parleyId) throw new Error(`fichier de parley illisible : ${parleyId}`);
 		value.members ??= {};
 		value.peers ??= {};
 		return value;
 	}
 
-	writeShell(file: ShellFile): void {
-		this.writeFile(this.shellPath(file.xshell_id), `${JSON.stringify(file, null, 2)}\n`);
+	writeParley(file: ParleyFile): void {
+		this.writeFile(this.parleyPath(file.parley_id), `${JSON.stringify(file, null, 2)}\n`);
 	}
 
 	/** Read-modify-write; `fn` returns false to skip the write. Returns the file after the change, if any. */
-	updateShell(xshellId: string, fn: (file: ShellFile) => boolean | void): ShellFile | undefined {
-		const file = this.readShell(xshellId);
+	updateParley(parleyId: string, fn: (file: ParleyFile) => boolean | void): ParleyFile | undefined {
+		const file = this.readParley(parleyId);
 		if (!file) return undefined;
 		if (fn(file) === false) return file;
-		this.writeShell(file);
+		this.writeParley(file);
 		return file;
 	}
 
-	removeShell(xshellId: string): void {
-		fs.rmSync(this.shellPath(xshellId), { force: true });
+	removeParley(parleyId: string): void {
+		fs.rmSync(this.parleyPath(parleyId), { force: true });
 	}
 
-	listShells(): ShellFile[] {
-		const dir = this.dir("shells");
-		const out: ShellFile[] = [];
+	listParleys(): ParleyFile[] {
+		const dir = this.dir("parleys");
+		const out: ParleyFile[] = [];
 		for (const entry of fs.readdirSync(dir)) {
 			if (!entry.endsWith(".json")) continue;
 			const id = entry.slice(0, -".json".length);
-			if (!XSHELL_ID_RE.test(id)) continue;
+			if (!PARLEY_ID_RE.test(id)) continue;
 			try {
-				const file = this.readShell(id);
+				const file = this.readParley(id);
 				if (file) out.push(file);
 			} catch {
-				// A corrupt file must not hide the other xshells.
+				// A corrupt file must not hide the other parleys.
 			}
 		}
 		return out;
@@ -190,8 +190,8 @@ export class Store {
 		return this.dir("audit");
 	}
 
-	auditPath(xshellId: string): string {
-		if (!XSHELL_ID_RE.test(xshellId)) throw new Error("xshell_id invalide");
-		return path.join(this.auditDir(), `${xshellId}.jsonl`);
+	auditPath(parleyId: string): string {
+		if (!PARLEY_ID_RE.test(parleyId)) throw new Error("parley_id invalide");
+		return path.join(this.auditDir(), `${parleyId}.jsonl`);
 	}
 }

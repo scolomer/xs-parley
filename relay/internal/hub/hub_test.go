@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/scolomer/omp-xshell/relay/internal/hub"
-	"github.com/scolomer/omp-xshell/relay/internal/proto"
+	"github.com/scolomer/xs-parley/relay/internal/hub"
+	"github.com/scolomer/xs-parley/relay/internal/proto"
 )
 
 const xid = "AAAAAAAAAAAAAAAAAAAAAA"

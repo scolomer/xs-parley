@@ -1,6 +1,6 @@
-// Command xshell-relay is the blind relay of the xshell protocol (SPEC §6).
+// Command xs-parley-relay is the blind relay of the xs-parley protocol (SPEC §6).
 //
-// Configuration: XSHELL_LISTEN (default ":8080").
+// Configuration: XSP_LISTEN (default ":8080").
 package main
 
 import (
@@ -13,9 +13,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/scolomer/omp-xshell/relay/internal/hub"
-	"github.com/scolomer/omp-xshell/relay/internal/metrics"
-	"github.com/scolomer/omp-xshell/relay/internal/ws"
+	"github.com/scolomer/xs-parley/relay/internal/hub"
+	"github.com/scolomer/xs-parley/relay/internal/metrics"
+	"github.com/scolomer/xs-parley/relay/internal/ws"
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 }
 
 func run(log *slog.Logger) error {
-	listen := os.Getenv("XSHELL_LISTEN")
+	listen := os.Getenv("XSP_LISTEN")
 	if listen == "" {
 		listen = ":8080"
 	}

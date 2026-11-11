@@ -1,5 +1,5 @@
 {
-  "name": "omp-xshell",
+  "name": "omp-xs-parley",
   "version": "0.1.0",
   "description": "omp extension: delegate actions to other omp sessions through an end-to-end encrypted relay",
   "type": "module",

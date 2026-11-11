@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/scolomer/omp-xshell/relay/internal/proto"
+	"github.com/scolomer/xs-parley/relay/internal/proto"
 )
 
 const (

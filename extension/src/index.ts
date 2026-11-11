@@ -1,15 +1,15 @@
 /**
- * xshell — omp extension (see doc/SPEC.md): delegate actions to other omp sessions through an end-to-end encrypted
- * relay. This file only wires omp events to `XshellSession`.
+ * xs-parley — omp extension (see doc/SPEC.md): delegate actions to other omp sessions through an end-to-end encrypted
+ * relay. This file only wires omp events to `ParleySession`.
  *
  * Process-level state: extension factories are re-bound to every subagent session, module variables are shared.
- * Only the main session (`ctx.agent.kind === "main"`) has an identity and the xshell tools.
+ * Only the main session (`ctx.agent.kind === "main"`) has an identity and the xs-parley tools.
  */
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import { Audit } from "./audit.ts";
 import { completeArguments, executeCommand, parseCommand } from "./commands.ts";
 import type { InjectedMessage, InjectOptions } from "./inbox.ts";
-import { STATE_ENTRY, type SessionHost, type SessionState, UserError, XshellSession } from "./session.ts";
+import { STATE_ENTRY, type SessionHost, type SessionState, UserError, ParleySession } from "./session.ts";
 import { Store } from "./store.ts";
 import { realClock, RelayTransport } from "./transport.ts";
 import { registerTools, TOOL_NAMES } from "./tools.ts";
@@ -19,7 +19,7 @@ class OmpHost implements SessionHost {
 	pi: ExtensionAPI | undefined;
 	ctx: ExtensionContext | undefined;
 	private toolSync: Promise<void> = Promise.resolve();
-	session: XshellSession | undefined;
+	session: ParleySession | undefined;
 	/** Session manager whose renames we follow, and how to stop following it. */
 	private watched: { manager: object; stop: () => void } | undefined;
 
@@ -35,7 +35,7 @@ class OmpHost implements SessionHost {
 
 	/**
 	 * Renames (`/name`, generated title) republish the alias at once. The hook is not part of the extension
-	 * typings: without it, `before_agent_start` and every `/xshell` command still pick up the new name.
+	 * typings: without it, `before_agent_start` and every `/xsp` command still pick up the new name.
 	 */
 	private watchRenames(manager: ExtensionContext["sessionManager"]): void {
 		if (this.watched?.manager === manager) return;
@@ -93,7 +93,7 @@ class OmpHost implements SessionHost {
 		this.pi?.appendEntry(STATE_ENTRY, state);
 	}
 
-	/** Shows the model only the xshell tools that apply right now (§7.2). Serialized: setActiveTools is async. */
+	/** Shows the model only the xs-parley tools that apply right now (§7.2). Serialized: setActiveTools is async. */
 	toolsChanged(): void {
 		this.toolSync = this.toolSync.then(() => this.syncTools()).catch(() => undefined);
 	}
@@ -113,7 +113,7 @@ class OmpHost implements SessionHost {
 
 interface Runtime {
 	host: OmpHost;
-	session: XshellSession;
+	session: ParleySession;
 	audit: Audit;
 }
 
@@ -125,13 +125,13 @@ function getRuntime(): Runtime {
 	const audit = new Audit(store);
 	const host = new OmpHost();
 	const transport = new RelayTransport();
-	const session = new XshellSession({ store, audit, transport, clock: realClock, host });
+	const session = new ParleySession({ store, audit, transport, clock: realClock, host });
 	host.session = session;
 	runtime = { host, session, audit };
 	return runtime;
 }
 
-/** Last `xshell-state` entry of the current branch (§7.5). */
+/** Last `xsp-state` entry of the current branch (§7.5). */
 function readState(ctx: ExtensionContext): SessionState | undefined {
 	try {
 		const entries = ctx.sessionManager.getBranch();
@@ -139,11 +139,11 @@ function readState(ctx: ExtensionContext): SessionState | undefined {
 			const entry = entries[i];
 			if (entry?.type !== "custom" || entry.customType !== STATE_ENTRY) continue;
 			const data = entry.data as Partial<SessionState> | undefined;
-			if (!data || !Array.isArray(data.shells)) return undefined;
-			return { shells: data.shells, pending: Array.isArray(data.pending) ? data.pending : [] };
+			if (!data || !Array.isArray(data.parleys)) return undefined;
+			return { parleys: data.parleys, pending: Array.isArray(data.pending) ? data.pending : [] };
 		}
 	} catch {
-		// Unreadable session: start without xshells.
+		// Unreadable session: start without parleys.
 	}
 	return undefined;
 }
@@ -153,12 +153,12 @@ function errorMessage(error: unknown): string {
 	return `erreur interne : ${error instanceof Error ? error.message : String(error)}`;
 }
 
-export default function xshell(pi: ExtensionAPI): void {
-	pi.setLabel("xshell");
+export default function xsParley(pi: ExtensionAPI): void {
+	pi.setLabel("xs-parley");
 	registerTools(pi, () => runtime?.session);
 
-	pi.registerCommand("xshell", {
-		description: "xshell : demander une action à une autre session omp (create|join|invite|leave|list|keys|rotate|policy|pending|log)",
+	pi.registerCommand("xsp", {
+		description: "xs-parley : demander une action à une autre session omp (create|join|invite|leave|list|keys|rotate|policy|pending|log)",
 		getArgumentCompletions: prefix => {
 			const session = runtime?.session;
 			return completeArguments(prefix, session?.all() ?? [], session?.localNames() ?? []);
@@ -195,7 +195,7 @@ export default function xshell(pi: ExtensionAPI): void {
 		rt.host.toolsChanged();
 	});
 
-	// `/new`, `/resume`, fork within the same process: leave the old session's xshells, join the new one's.
+	// `/new`, `/resume`, fork within the same process: leave the old session's parleys, join the new one's.
 	pi.on("session_switch", async (_event, ctx) => {
 		if (ctx.agent.kind !== "main") return;
 		const rt = getRuntime();

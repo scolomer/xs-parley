@@ -1,4 +1,4 @@
-app = "xshell-relay"
+app = "xs-parley-relay"
 primary_region = "cdg"
 
 [build]

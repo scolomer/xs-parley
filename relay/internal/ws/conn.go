@@ -9,8 +9,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/scolomer/omp-xshell/relay/internal/hub"
-	"github.com/scolomer/omp-xshell/relay/internal/proto"
+	"github.com/scolomer/xs-parley/relay/internal/hub"
+	"github.com/scolomer/xs-parley/relay/internal/proto"
 )
 
 // conn is one served WebSocket connection. Three goroutines work on it: the
@@ -108,23 +108,23 @@ func (c *conn) handle(data []byte) {
 
 	switch in.Type {
 	case proto.TypeJoin:
-		h.Join(c.sess, in.XshellID, in.FP, in.CertBox)
+		h.Join(c.sess, in.ParleyID, in.FP, in.CertBox)
 		h.Push(c.sess, proto.TypeOK, proto.OK(in.ID))
 	case proto.TypeLeave:
-		if e := h.Leave(c.sess, in.XshellID); e != nil {
+		if e := h.Leave(c.sess, in.ParleyID); e != nil {
 			h.Refuse(c.sess, in.ID, e)
 			return
 		}
 		h.Push(c.sess, proto.TypeOK, proto.OK(in.ID))
 	case proto.TypeList:
-		list, e := h.Members(c.sess, in.XshellID)
+		list, e := h.Members(c.sess, in.ParleyID)
 		if e != nil {
 			h.Refuse(c.sess, in.ID, e)
 			return
 		}
-		h.Push(c.sess, proto.TypeMembers, proto.MembersFrame(in.ID, in.XshellID, list))
+		h.Push(c.sess, proto.TypeMembers, proto.MembersFrame(in.ID, in.ParleyID, list))
 	case proto.TypeSend:
-		if e := h.Route(c.sess, in.XshellID, in.To, in.Env); e != nil {
+		if e := h.Route(c.sess, in.ParleyID, in.To, in.Env); e != nil {
 			h.Refuse(c.sess, in.ID, e)
 			return
 		}

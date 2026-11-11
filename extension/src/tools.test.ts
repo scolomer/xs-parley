@@ -9,8 +9,8 @@ const fpE = `xs:${"AAAAAAAAAB".padEnd(43, "C")}`;
 const fpC = `xs:${"Z".repeat(43)}`;
 
 // Only the fields the resolution reads are present.
-function candidate(alias: string, fp: string, shell: string): PeerCandidate {
-	const m = { name: shell } as unknown as Membership;
+function candidate(alias: string, fp: string, parley: string): PeerCandidate {
+	const m = { name: parley } as unknown as Membership;
 	const peer = { alias, fp, rank: "S", role: "", online: true } as unknown as PeerView;
 	return { m, peer };
 }
@@ -45,7 +45,7 @@ describe("resolveTarget", () => {
 		expect(r.failure.message).toContain("prod@staging");
 	});
 
-	test("alias@name narrows by xshell; still ambiguous if two fingerprints share the alias there", () => {
+	test("alias@name narrows by parley; still ambiguous if two fingerprints share the alias there", () => {
 		expect(ok(resolveTarget(all, "prod@staging")).peer.fp).toBe(fpC);
 		const r = resolveTarget(all, "prod@infra");
 		expect(!r.ok && r.failure.code).toBe("ambiguous");
@@ -66,8 +66,8 @@ describe("resolveTarget", () => {
 		expect(!short.ok && short.failure.code).toBe("unknown_member");
 		const unknown = resolveTarget(all, "nobody");
 		expect(!unknown.ok && unknown.failure.code).toBe("unknown_member");
-		const wrongShell = resolveTarget(all, "solo@staging");
-		expect(!wrongShell.ok && wrongShell.failure.code).toBe("unknown_member");
+		const wrongParley = resolveTarget(all, "solo@staging");
+		expect(!wrongParley.ok && wrongParley.failure.code).toBe("unknown_member");
 		const empty = resolveTarget(all, "@infra");
 		expect(!empty.ok && empty.failure.code).toBe("unknown_member");
 	});
@@ -87,6 +87,6 @@ describe("outcomeResult", () => {
 		expect(outcomeResult({ status: "refused", request_id: "r", from: "b@i", text: "" }).isError).toBe(true);
 		expect(outcomeResult({ status: "pending", request_id: "r" }).isError).toBeFalsy();
 		const q = outcomeResult({ status: "question", request_id: "r", from: "b@i", question_id: "q1", question: "why?" });
-		expect((q.content[0] as { text: string }).text).toContain("xshell_answer");
+		expect((q.content[0] as { text: string }).text).toContain("xsp_answer");
 	});
 });

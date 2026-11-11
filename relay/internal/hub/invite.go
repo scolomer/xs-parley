@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"time"
 
-	"github.com/scolomer/omp-xshell/relay/internal/proto"
+	"github.com/scolomer/xs-parley/relay/internal/proto"
 )
 
 // DefaultClaimTimeout is how long the holder of an offer has to grant or

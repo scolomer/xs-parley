@@ -1,6 +1,6 @@
 /**
- * Local audit trail (§7.6): `audit/<xshell_id>.jsonl`, append-only, 0600, rotated at 10 MB.
- * Rotation keeps at most 3 files per xshell: the current one plus `.1` and `.2` (10 MB × 3).
+ * Local audit trail (§7.6): `audit/<parley_id>.jsonl`, append-only, 0600, rotated at 10 MB.
+ * Rotation keeps at most 3 files per parley: the current one plus `.1` and `.2` (10 MB × 3).
  */
 import * as fs from "node:fs";
 import type { Store } from "./store.ts";
@@ -46,7 +46,7 @@ export interface AuditRecord {
 
 export interface AuditLine extends AuditRecord {
 	ts: string;
-	xshell_id: string;
+	parley_id: string;
 }
 
 export const AUDIT_MAX_BYTES = 10 * 1024 * 1024;
@@ -60,11 +60,11 @@ export class Audit {
 	) {}
 
 	/** Never throws: a full disk must not break the protocol. */
-	log(xshellId: string, record: AuditRecord): void {
+	log(parleyId: string, record: AuditRecord): void {
 		try {
-			const file = this.store.auditPath(xshellId);
+			const file = this.store.auditPath(parleyId);
 			this.rotateIfNeeded(file);
-			const line: AuditLine = { ts: new Date(this.now()).toISOString(), xshell_id: xshellId, ...record };
+			const line: AuditLine = { ts: new Date(this.now()).toISOString(), parley_id: parleyId, ...record };
 			fs.appendFileSync(file, `${JSON.stringify(line)}\n`, { mode: 0o600 });
 			fs.chmodSync(file, 0o600);
 		} catch {
@@ -87,9 +87,9 @@ export class Audit {
 		fs.renameSync(file, `${file}.1`);
 	}
 
-	/** Last `count` events of one xshell, oldest first. */
-	tail(xshellId: string, count: number): AuditLine[] {
-		const file = this.store.auditPath(xshellId);
+	/** Last `count` events of one parley, oldest first. */
+	tail(parleyId: string, count: number): AuditLine[] {
+		const file = this.store.auditPath(parleyId);
 		const lines: AuditLine[] = [];
 		// Newest generation last: read `.2`, `.1`, then the current file, and keep the end.
 		for (let i = AUDIT_FILES - 1; i >= 0; i--) {
@@ -113,11 +113,11 @@ export class Audit {
 	}
 }
 
-export function formatAuditLine(line: AuditLine, shellName?: string): string {
+export function formatAuditLine(line: AuditLine, parleyName?: string): string {
 	const peer = line.peer_alias ? ` ${line.peer_alias}${line.peer_fp ? `(${line.peer_fp.slice(0, 11)}…)` : ""}` : "";
 	const status = line.status ? ` [${line.status}${line.reason ? `: ${line.reason}` : ""}]` : "";
 	const policy = line.policy ? ` policy=${line.policy}` : "";
 	const rank = line.rank ? ` rank=${line.rank}` : "";
 	const text = line.text ? ` « ${line.text.length > 200 ? `${line.text.slice(0, 200)}…` : line.text} »` : "";
-	return `${line.ts} ${shellName ?? line.xshell_id} ${line.event}${peer}${policy}${rank}${status}${text}`.replace(/\s*\n\s*/g, " ");
+	return `${line.ts} ${parleyName ?? line.parley_id} ${line.event}${peer}${policy}${rank}${status}${text}`.replace(/\s*\n\s*/g, " ");
 }

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/scolomer/omp-xshell/relay/internal/hub"
+	"github.com/scolomer/xs-parley/relay/internal/hub"
 )
 
 const (
@@ -76,11 +76,11 @@ func TestInviteGrantEndToEndWithoutJoin(t *testing.T) {
 
 	text := metricsText(t, r)
 	for _, want := range []string{
-		"xshell_relay_offers 0",
-		`xshell_relay_invites_total{event="claim"} 2`,
-		`xshell_relay_invites_total{event="grant"} 1`,
-		`xshell_relay_frames_total{direction="out",type="granted"} 1`,
-		`xshell_relay_frames_total{direction="out",type="claim_request"} 1`,
+		"xsp_relay_offers 0",
+		`xsp_relay_invites_total{event="claim"} 2`,
+		`xsp_relay_invites_total{event="grant"} 1`,
+		`xsp_relay_frames_total{direction="out",type="granted"} 1`,
+		`xsp_relay_frames_total{direction="out",type="claim_request"} 1`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("missing %q in:\n%s", want, text)
@@ -128,7 +128,7 @@ func TestInviteClaimTimesOut(t *testing.T) {
 	// A grant after the deadline is too late.
 	holder.send(frame{"v": 1, "t": "grant", "id": "g1", "claim": claim, "box": "box"})
 	holder.expect(frame{"t": "error", "code": "no_invite", "id": "g1"})
-	if text := metricsText(t, r); !strings.Contains(text, `xshell_relay_invites_total{event="timeout"} 1`) {
+	if text := metricsText(t, r); !strings.Contains(text, `xsp_relay_invites_total{event="timeout"} 1`) {
 		t.Errorf("timeout not counted:\n%s", text)
 	}
 }

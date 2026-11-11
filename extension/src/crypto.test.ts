@@ -13,21 +13,21 @@ import {
 	type Kind,
 	type KemPair,
 	type Plain,
-	type ShellKey,
+	type ParleyKey,
 	type SignPair,
 	CERT_MAX_AGE_MS,
 	PLAIN_MAX,
 	ROLE_MAX,
-	XshellCryptoError,
+	ParleyCryptoError,
 	b64uDecode,
 	b64uEncode,
 	certFingerprint,
 	fingerprint,
-	formatShellKey,
+	formatParleyKey,
 	formatTimestamp,
 	generateKemPair,
 	answerKey,
-	generateShell,
+	generateParley,
 	generateSignPair,
 	groupKey,
 	jcs,
@@ -43,7 +43,7 @@ import {
 	sealInviteRequestWithNonce,
 	sealInviteWithEphemeral,
 	openEnvelope,
-	parseShellKey,
+	parseParleyKey,
 	parseTimestamp,
 	plainSize,
 	rankPubs,
@@ -63,7 +63,7 @@ function code(fn: () => unknown): CryptoErrorCode | "no_error" {
 	try {
 		fn();
 	} catch (e) {
-		if (e instanceof XshellCryptoError) return e.code;
+		if (e instanceof ParleyCryptoError) return e.code;
 		throw e;
 	}
 	return "no_error";
@@ -73,7 +73,7 @@ async function codeAsync(fn: () => Promise<unknown>): Promise<CryptoErrorCode | 
 	try {
 		await fn();
 	} catch (e) {
-		if (e instanceof XshellCryptoError) return e.code;
+		if (e instanceof ParleyCryptoError) return e.code;
 		throw e;
 	}
 	return "no_error";
@@ -96,7 +96,7 @@ interface Member {
 	cert: Cert;
 }
 
-function makeMember(key: ShellKey, alias: string, issuedAt: Date = NOW): Member {
+function makeMember(key: ParleyKey, alias: string, issuedAt: Date = NOW): Member {
 	const sign = generateSignPair();
 	const kem = generateKemPair();
 	const cert = signCert(key, { signPub: sign.pub, kemPub: kem.pub, alias, role: "role de test", issuedAt });
@@ -104,16 +104,16 @@ function makeMember(key: ShellKey, alias: string, issuedAt: Date = NOW): Member 
 }
 
 function fixture() {
-	const { ask, answer } = generateShell("relay.example.com:8443", "prod-k8s");
+	const { ask, answer } = generateParley("relay.example.com:8443", "prod-k8s");
 	const master = makeMember(ask, "master");
 	const slave = makeMember(answer, "prod-box");
 	return { ask, answer, master, slave };
 }
 
-function header(from: Member, to: Member, key: ShellKey, over: Partial<Header> = {}): Header {
+function header(from: Member, to: Member, key: ParleyKey, over: Partial<Header> = {}): Header {
 	return {
 		v: 1,
-		xshell_id: key.xshellId,
+		parley_id: key.parleyId,
 		msg_id: newMsgId(),
 		kind: "request",
 		from: from.fp,
@@ -213,51 +213,51 @@ describe("vectors", () => {
 		}
 	});
 
-	test("shell-key", () => {
+	test("parley-key", () => {
 		const v = loadVector<{
-			cases: { key: string; relay: string; xshell_id: string; name: string; rank: string; seed: string; other: string }[];
-		}>("shell-key");
+			cases: { key: string; relay: string; parley_id: string; name: string; rank: string; seed: string; other: string }[];
+		}>("parley-key");
 		expect(v.cases.map(c => c.relay)).toContain("relay.example.com:8443");
 		for (const c of v.cases) {
-			const k = parseShellKey(c.key);
+			const k = parseParleyKey(c.key);
 			expect(k.relay).toBe(c.relay);
-			expect(k.xshellId).toBe(c.xshell_id);
+			expect(k.parleyId).toBe(c.parley_id);
 			expect(k.name).toBe(c.name);
 			expect(k.rank).toBe(c.rank as "A" | "S");
 			expect(b64uEncode(k.seed)).toBe(c.seed);
 			expect(b64uEncode(k.rank === "A" ? k.answerSeed : k.askPub)).toBe(c.other);
-			expect(formatShellKey(k)).toBe(c.key);
+			expect(formatParleyKey(k)).toBe(c.key);
 		}
 	});
 
 	test("K_grp", () => {
 		const v = loadVector<{
-			xshell_id: string;
+			parley_id: string;
 			pub_ask: string;
 			pub_answer: string;
 			key_ask: string;
 			key_answer: string;
 			k_grp: string;
 		}>("k-grp");
-		const ask = parseShellKey(v.key_ask);
-		const answer = parseShellKey(v.key_answer);
+		const ask = parseParleyKey(v.key_ask);
+		const answer = parseParleyKey(v.key_answer);
 		for (const key of [ask, answer]) {
 			const pubs = rankPubs(key);
 			expect(b64uEncode(pubs.pubAsk)).toBe(v.pub_ask);
 			expect(b64uEncode(pubs.pubAnswer)).toBe(v.pub_answer);
 			expect(b64uEncode(groupKey(key))).toBe(v.k_grp);
 		}
-		expect(ask.xshellId).toBe(v.xshell_id);
+		expect(ask.parleyId).toBe(v.parley_id);
 	});
 
 	test("cert", () => {
 		const v = loadVector<{
 			now: string;
-			cases: { signing_key: string; xshell_id: string; sign_pub: string; kem_pub: string; jcs_body: string; cert: Cert; fp: string }[];
+			cases: { signing_key: string; parley_id: string; sign_pub: string; kem_pub: string; jcs_body: string; cert: Cert; fp: string }[];
 		}>("cert");
 		const now = new Date(v.now);
 		for (const c of v.cases) {
-			const key = parseShellKey(c.signing_key);
+			const key = parseParleyKey(c.signing_key);
 			const rebuilt = signCert(key, {
 				signPub: b64uDecode(c.sign_pub, 32),
 				kemPub: b64uDecode(c.kem_pub, 32),
@@ -268,22 +268,22 @@ describe("vectors", () => {
 			expect(rebuilt).toEqual(c.cert);
 			expect(jcs(c.cert.body)).toBe(c.jcs_body);
 			expect(certFingerprint(c.cert)).toBe(c.fp);
-			expect(verifyCert(structuredClone(c.cert), key, c.xshell_id, c.fp, now)).toEqual(c.cert);
+			expect(verifyCert(structuredClone(c.cert), key, c.parley_id, c.fp, now)).toEqual(c.cert);
 		}
 	});
 
 	test("cert_box", () => {
-		const v = loadVector<{ xshell_id: string; k_grp: string; nonce: string; cert: Cert; fp: string; cert_box: string }>("cert-box");
+		const v = loadVector<{ parley_id: string; k_grp: string; nonce: string; cert: Cert; fp: string; cert_box: string }>("cert-box");
 		const kGrp = b64uDecode(v.k_grp, 32);
-		expect(sealCertBoxWithNonce(kGrp, v.xshell_id, v.cert, b64uDecode(v.nonce, 24))).toBe(v.cert_box);
-		expect(openCertBox(kGrp, v.xshell_id, v.cert_box)).toEqual(v.cert);
+		expect(sealCertBoxWithNonce(kGrp, v.parley_id, v.cert, b64uDecode(v.nonce, 24))).toBe(v.cert_box);
+		expect(openCertBox(kGrp, v.parley_id, v.cert_box)).toEqual(v.cert);
 		expect(b64uDecode(v.cert_box).length).toBe(24 + 16 + new TextEncoder().encode(jcs(v.cert)).length);
 	});
 
 	test("envelope", async () => {
 		const v = loadVector<{
 			now: string;
-			xshell_id: string;
+			parley_id: string;
 			verifier_key: string;
 			sender_sign_seed: string;
 			recipient_kem_priv: string;
@@ -306,9 +306,9 @@ describe("vectors", () => {
 		);
 		expect(rebuilt).toEqual(v.envelope);
 		const opened = await openEnvelope(structuredClone(v.envelope), {
-			frameXshellId: v.xshell_id,
+			frameParleyId: v.parley_id,
 			selfFp: v.h.to,
-			key: parseShellKey(v.verifier_key),
+			key: parseParleyKey(v.verifier_key),
 			kemPrivs: [b64uDecode(v.recipient_kem_priv, 32)],
 			now: new Date(v.now),
 		});
@@ -332,7 +332,7 @@ describe("vectors", () => {
 			master_ephemeral_pub: string;
 			shared: string;
 			k_box: string;
-			shell_key: string;
+			parley_key: string;
 			box_nonce: string;
 			box: string;
 		}>("invite");
@@ -350,7 +350,7 @@ describe("vectors", () => {
 			sha256,
 			concatBytes(secrets.key, b64uDecode(v.shared, 32)),
 			new Uint8Array(0),
-			concatBytes(new TextEncoder().encode("xshell invite box v2"), new TextEncoder().encode(v.invite_id), eJ.pub, eM.pub),
+			concatBytes(new TextEncoder().encode("xs-parley invite box v2"), new TextEncoder().encode(v.invite_id), eJ.pub, eM.pub),
 			32,
 		);
 		expect(b64uEncode(kBox)).toBe(v.k_box);
@@ -359,9 +359,9 @@ describe("vectors", () => {
 		expect(sealInviteRequestWithNonce(secrets.key, v.invite_id, eJ.pub, v.hello, b64uDecode(v.request_nonce, 24))).toBe(v.req);
 		expect(openInviteRequest(secrets.key, v.invite_id, eJ.pub, v.req)).toEqual(v.hello);
 
-		expect(sealInviteWithEphemeral(secrets.key, v.invite_id, eJ.pub, v.shell_key, eM.priv, b64uDecode(v.box_nonce, 24))).toBe(v.box);
-		expect(openInvite(secrets.key, v.invite_id, eJ.priv, v.box)).toBe(v.shell_key);
-		expect(b64uDecode(v.box).length).toBe(32 + 24 + 16 + new TextEncoder().encode(jcs({ v: 1, key: v.shell_key })).length);
+		expect(sealInviteWithEphemeral(secrets.key, v.invite_id, eJ.pub, v.parley_key, eM.priv, b64uDecode(v.box_nonce, 24))).toBe(v.box);
+		expect(openInvite(secrets.key, v.invite_id, eJ.priv, v.box)).toBe(v.parley_key);
+		expect(b64uDecode(v.box).length).toBe(32 + 24 + 16 + new TextEncoder().encode(jcs({ v: 1, key: v.parley_key })).length);
 		// Without e_j.priv, K_inv alone does not open the recorded box.
 		const raw = b64uDecode(v.box);
 		expect(() => xchacha20poly1305(secrets.key, raw.subarray(32, 56), new TextEncoder().encode(v.invite_id)).decrypt(raw.subarray(56))).toThrow();
@@ -369,20 +369,20 @@ describe("vectors", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Shell keys
+// Parley keys
 // ---------------------------------------------------------------------------
 
-describe("shell keys", () => {
+describe("parley keys", () => {
 	test("generate, format, parse round trip (relay with port)", () => {
-		const { ask, answer } = generateShell("relay.example.com:8443", "prod-k8s");
+		const { ask, answer } = generateParley("relay.example.com:8443", "prod-k8s");
 		for (const key of [ask, answer]) {
-			const text = formatShellKey(key);
+			const text = formatParleyKey(key);
 			expect(text.startsWith("xs2:relay.example.com:8443:")).toBe(true);
-			expect(parseShellKey(text)).toEqual(key);
-			expect(parseShellKey(`  ${text}\n`)).toEqual(key);
+			expect(parseParleyKey(text)).toEqual(key);
+			expect(parseParleyKey(`  ${text}\n`)).toEqual(key);
 		}
-		expect(ask.xshellId).toBe(answer.xshellId);
-		expect(ask.xshellId).toHaveLength(22);
+		expect(ask.parleyId).toBe(answer.parleyId);
+		expect(ask.parleyId).toHaveLength(22);
 		expect(ask.rank).toBe("A");
 		expect(answer.rank).toBe("S");
 		// Each key verifies both ranks.
@@ -391,24 +391,24 @@ describe("shell keys", () => {
 	});
 
 	test("a master key yields the answer key; an answer key yields nothing more", () => {
-		const { ask, answer } = generateShell("relay.example.com", "prod-k8s");
-		const reparsed = parseShellKey(formatShellKey(ask));
+		const { ask, answer } = generateParley("relay.example.com", "prod-k8s");
+		const reparsed = parseParleyKey(formatParleyKey(ask));
 		if (reparsed.rank !== "A") throw new Error("ask key parsed with rank S");
-		expect(formatShellKey(answerKey(reparsed))).toBe(formatShellKey(answer));
+		expect(formatParleyKey(answerKey(reparsed))).toBe(formatParleyKey(answer));
 		// The answer key carries the ask public key, never the ask seed.
-		expect(formatShellKey(answer)).not.toContain(b64uEncode(ask.seed));
+		expect(formatParleyKey(answer)).not.toContain(b64uEncode(ask.seed));
 	});
 
 	test("relay without port and with IPv6 literal", () => {
-		const { ask } = generateShell("localhost", "x");
-		expect(parseShellKey(formatShellKey(ask)).relay).toBe("localhost");
+		const { ask } = generateParley("localhost", "x");
+		expect(parseParleyKey(formatParleyKey(ask)).relay).toBe("localhost");
 		const v6 = { ...ask, relay: "[::1]:8080" };
-		expect(parseShellKey(formatShellKey(v6)).relay).toBe("[::1]:8080");
+		expect(parseParleyKey(formatParleyKey(v6)).relay).toBe("[::1]:8080");
 	});
 
 	test("rejects malformed keys", () => {
-		const { ask } = generateShell("relay.example.com:8443", "prod-k8s");
-		const good = formatShellKey(ask);
+		const { ask } = generateParley("relay.example.com:8443", "prod-k8s");
+		const good = formatParleyKey(ask);
 		const parts = good.split(":");
 		const withTail = (i: number, value: string) => {
 			const p = [...parts];
@@ -422,7 +422,7 @@ describe("shell keys", () => {
 			good.replace(/^xs2/, "xs1"), // obsolete format
 			good.slice(0, good.lastIndexOf(":")), // missing field
 			`${good}:extra`, // shifts every field: invalid rank
-			withTail(0, "short"), // xshell_id length
+			withTail(0, "short"), // parley_id length
 			withTail(1, "bad name"), // name
 			withTail(1, ""),
 			withTail(2, "X"), // rank
@@ -433,9 +433,9 @@ describe("shell keys", () => {
 			good.replace("relay.example.com:8443", "relay example"),
 			good.replace("8443", "port"),
 		];
-		for (const bad of cases) expect(code(() => parseShellKey(bad))).toBe("bad_key");
-		expect(code(() => generateShell("bad relay", "n"))).toBe("bad_key");
-		expect(code(() => generateShell("relay.example.com", "bad:name"))).toBe("bad_key");
+		for (const bad of cases) expect(code(() => parseParleyKey(bad))).toBe("bad_key");
+		expect(code(() => generateParley("bad relay", "n"))).toBe("bad_key");
+		expect(code(() => generateParley("relay.example.com", "bad:name"))).toBe("bad_key");
 	});
 });
 
@@ -447,10 +447,10 @@ describe("verifyCert", () => {
 	test("accepts a valid cert of each rank", () => {
 		const f = fixture();
 		for (const m of [f.master, f.slave]) {
-			const out = verifyCert(structuredClone(m.cert), f.ask, f.ask.xshellId, m.fp, NOW);
+			const out = verifyCert(structuredClone(m.cert), f.ask, f.ask.parleyId, m.fp, NOW);
 			expect(out).toEqual(m.cert);
 			// Same result with the other rank's key (each key verifies both ranks).
-			expect(verifyCert(structuredClone(m.cert), f.answer, f.ask.xshellId, m.fp, NOW)).toEqual(m.cert);
+			expect(verifyCert(structuredClone(m.cert), f.answer, f.ask.parleyId, m.fp, NOW)).toEqual(m.cert);
 		}
 	});
 
@@ -467,7 +467,7 @@ describe("verifyCert", () => {
 			issuedAt: NOW,
 		});
 		expect(forged.body.rank).toBe("S");
-		expect(code(() => verifyCert(forged, f.ask, f.ask.xshellId, fingerprint(sign.pub), NOW))).toBe("bad_signature");
+		expect(code(() => verifyCert(forged, f.ask, f.ask.parleyId, fingerprint(sign.pub), NOW))).toBe("bad_signature");
 		// Claims rank A but signed by the answer seed.
 		const forged2 = signCert({ ...f.ask, seed: f.answer.seed }, {
 			signPub: sign.pub,
@@ -476,34 +476,34 @@ describe("verifyCert", () => {
 			role: "r",
 			issuedAt: NOW,
 		});
-		expect(code(() => verifyCert(forged2, f.ask, f.ask.xshellId, fingerprint(sign.pub), NOW))).toBe("bad_signature");
-		// Cert from an unrelated xshell, same xshell_id claimed.
-		const other = generateShell("relay.example.com", "other");
-		const alien = signCert({ ...other.ask, xshellId: f.ask.xshellId }, {
+		expect(code(() => verifyCert(forged2, f.ask, f.ask.parleyId, fingerprint(sign.pub), NOW))).toBe("bad_signature");
+		// Cert from an unrelated parley, same parley_id claimed.
+		const other = generateParley("relay.example.com", "other");
+		const alien = signCert({ ...other.ask, parleyId: f.ask.parleyId }, {
 			signPub: sign.pub,
 			kemPub: kem.pub,
 			alias: "alien",
 			role: "r",
 			issuedAt: NOW,
 		});
-		expect(code(() => verifyCert(alien, f.ask, f.ask.xshellId, fingerprint(sign.pub), NOW))).toBe("bad_signature");
+		expect(code(() => verifyCert(alien, f.ask, f.ask.parleyId, fingerprint(sign.pub), NOW))).toBe("bad_signature");
 	});
 
 	test("rejects a rank altered after signing", () => {
 		const f = fixture();
 		const swapped = patch(f.slave.cert, "body.rank", "A");
-		expect(code(() => verifyCert(swapped, f.ask, f.ask.xshellId, f.slave.fp, NOW))).toBe("bad_signature");
+		expect(code(() => verifyCert(swapped, f.ask, f.ask.parleyId, f.slave.fp, NOW))).toBe("bad_signature");
 	});
 
 	test("rejects computed fingerprint ≠ announced", () => {
 		const f = fixture();
-		expect(code(() => verifyCert(f.master.cert, f.ask, f.ask.xshellId, f.slave.fp, NOW))).toBe("fp_mismatch");
+		expect(code(() => verifyCert(f.master.cert, f.ask, f.ask.parleyId, f.slave.fp, NOW))).toBe("fp_mismatch");
 	});
 
-	test("rejects another xshell_id", () => {
+	test("rejects another parley_id", () => {
 		const f = fixture();
-		const other = generateShell("relay.example.com", "other");
-		expect(code(() => verifyCert(f.master.cert, f.ask, other.ask.xshellId, f.master.fp, NOW))).toBe("wrong_xshell");
+		const other = generateParley("relay.example.com", "other");
+		expect(code(() => verifyCert(f.master.cert, f.ask, other.ask.parleyId, f.master.fp, NOW))).toBe("wrong_parley");
 	});
 
 	test("freshness window: 25 h in the past, 5 min in the future", () => {
@@ -518,14 +518,14 @@ describe("verifyCert", () => {
 			[10 * 60_000, "stale_cert"],
 		] as const) {
 			const m = at(offset);
-			expect(code(() => verifyCert(m.cert, f.ask, f.ask.xshellId, m.fp, NOW))).toBe(expected);
+			expect(code(() => verifyCert(m.cert, f.ask, f.ask.parleyId, m.fp, NOW))).toBe(expected);
 		}
 	});
 
 	test("rejects extra, missing or mistyped fields", () => {
 		const f = fixture();
 		const check = (c: unknown, expected: CryptoErrorCode) =>
-			expect(code(() => verifyCert(c, f.ask, f.ask.xshellId, f.master.fp, NOW))).toBe(expected);
+			expect(code(() => verifyCert(c, f.ask, f.ask.parleyId, f.master.fp, NOW))).toBe(expected);
 		check(patch(f.master.cert, "extra", 1), "bad_structure");
 		check(patch(f.master.cert, "body.extra", 1), "bad_structure");
 		check(patch(f.master.cert, "body.role", undefined), "bad_structure");
@@ -562,7 +562,7 @@ describe("verifyCert", () => {
 		// Plain (non-strict) noble verification would accept it; ours must not.
 		const msg = new TextEncoder().encode(jcs(cert.body));
 		expect(ed25519.verify(sig, msg, rankPubs(f.ask).pubAsk, { zip215: false })).toBe(true);
-		expect(code(() => verifyCert(cert, f.ask, f.ask.xshellId, f.master.fp, NOW))).toBe("bad_signature");
+		expect(code(() => verifyCert(cert, f.ask, f.ask.parleyId, f.master.fp, NOW))).toBe("bad_signature");
 	});
 
 	test("role is sanitized at signing", () => {
@@ -577,7 +577,7 @@ describe("verifyCert", () => {
 		});
 		expect(Array.from(cert.body.role)).toHaveLength(ROLE_MAX);
 		expect(cert.body.role.startsWith("accèsprod")).toBe(true);
-		expect(verifyCert(cert, f.ask, f.ask.xshellId, fingerprint(sign.pub), NOW)).toEqual(cert);
+		expect(verifyCert(cert, f.ask, f.ask.parleyId, fingerprint(sign.pub), NOW)).toEqual(cert);
 	});
 });
 
@@ -585,28 +585,28 @@ describe("cert_box", () => {
 	test("round trip and validation", () => {
 		const f = fixture();
 		const kGrp = groupKey(f.ask);
-		const box = sealCertBox(kGrp, f.ask.xshellId, f.master.cert);
-		expect(box).not.toBe(sealCertBox(kGrp, f.ask.xshellId, f.master.cert)); // random nonce
-		const opened = openCertBox(kGrp, f.ask.xshellId, box);
-		expect(verifyCert(opened, f.answer, f.ask.xshellId, f.master.fp, NOW)).toEqual(f.master.cert);
+		const box = sealCertBox(kGrp, f.ask.parleyId, f.master.cert);
+		expect(box).not.toBe(sealCertBox(kGrp, f.ask.parleyId, f.master.cert)); // random nonce
+		const opened = openCertBox(kGrp, f.ask.parleyId, box);
+		expect(verifyCert(opened, f.answer, f.ask.parleyId, f.master.fp, NOW)).toEqual(f.master.cert);
 	});
 
 	test("rejects undecryptable boxes", () => {
 		const f = fixture();
-		const other = generateShell("relay.example.com", "other");
+		const other = generateParley("relay.example.com", "other");
 		const kGrp = groupKey(f.ask);
-		const box = sealCertBox(kGrp, f.ask.xshellId, f.master.cert);
-		expect(code(() => openCertBox(groupKey(other.ask), f.ask.xshellId, box))).toBe("decrypt_failed"); // wrong K_grp
-		expect(code(() => openCertBox(kGrp, other.ask.xshellId, box))).toBe("decrypt_failed"); // wrong aad
+		const box = sealCertBox(kGrp, f.ask.parleyId, f.master.cert);
+		expect(code(() => openCertBox(groupKey(other.ask), f.ask.parleyId, box))).toBe("decrypt_failed"); // wrong K_grp
+		expect(code(() => openCertBox(kGrp, other.ask.parleyId, box))).toBe("decrypt_failed"); // wrong aad
 		const raw = b64uDecode(box);
 		raw[raw.length - 1] = raw[raw.length - 1]! ^ 1;
-		expect(code(() => openCertBox(kGrp, f.ask.xshellId, b64uEncode(raw)))).toBe("decrypt_failed");
+		expect(code(() => openCertBox(kGrp, f.ask.parleyId, b64uEncode(raw)))).toBe("decrypt_failed");
 		raw[raw.length - 1] = raw[raw.length - 1]! ^ 1;
 		raw[3] = raw[3]! ^ 1; // nonce
-		expect(code(() => openCertBox(kGrp, f.ask.xshellId, b64uEncode(raw)))).toBe("decrypt_failed");
-		expect(code(() => openCertBox(kGrp, f.ask.xshellId, b64uEncode(new Uint8Array(39))))).toBe("bad_encoding");
-		expect(code(() => openCertBox(kGrp, f.ask.xshellId, "not base64!"))).toBe("bad_encoding");
-		expect(code(() => openCertBox(kGrp, f.ask.xshellId, `${box}=`))).toBe("bad_encoding");
+		expect(code(() => openCertBox(kGrp, f.ask.parleyId, b64uEncode(raw)))).toBe("decrypt_failed");
+		expect(code(() => openCertBox(kGrp, f.ask.parleyId, b64uEncode(new Uint8Array(39))))).toBe("bad_encoding");
+		expect(code(() => openCertBox(kGrp, f.ask.parleyId, "not base64!"))).toBe("bad_encoding");
+		expect(code(() => openCertBox(kGrp, f.ask.parleyId, `${box}=`))).toBe("bad_encoding");
 	});
 });
 
@@ -621,7 +621,7 @@ describe("envelopes", () => {
 		const env = await sealEnvelope(h, plain ?? { cert: f.master.cert, text: "ls -la" }, f.slave.kem.pub, f.master.sign.seed);
 		const open = (input: unknown, o: Partial<Parameters<typeof openEnvelope>[1]> = {}) =>
 			openEnvelope(input, {
-				frameXshellId: f.ask.xshellId,
+				frameParleyId: f.ask.parleyId,
 				selfFp: f.slave.fp,
 				key: f.answer,
 				kemPrivs: [f.slave.kem.priv],
@@ -645,7 +645,7 @@ describe("envelopes", () => {
 		const base = (kind: Kind) => header(f.slave, f.master, f.ask, { kind, reply_to: newMsgId() });
 		const open = (env: unknown) =>
 			openEnvelope(env, {
-				frameXshellId: f.ask.xshellId,
+				frameParleyId: f.ask.parleyId,
 				selfFp: f.master.fp,
 				key: f.ask,
 				kemPrivs: [f.master.kem.priv],
@@ -670,18 +670,18 @@ describe("envelopes", () => {
 		expect(await codeAsync(() => open(badStatus))).toBe("bad_structure");
 	});
 
-	test("rejects wrong recipient or wrong xshell_id", async () => {
+	test("rejects wrong recipient or wrong parley_id", async () => {
 		const { f, env, open } = await sealed();
 		expect(await codeAsync(() => open(env, { selfFp: f.master.fp }))).toBe("bad_address");
-		expect(await codeAsync(() => open(env, { frameXshellId: generateShell("r", "n").ask.xshellId }))).toBe("bad_address");
+		expect(await codeAsync(() => open(env, { frameParleyId: generateParley("r", "n").ask.parleyId }))).toBe("bad_address");
 		// h.to ≠ self at sealing time
 		const wrongTo = await sealed({ to: makeMember(f.ask, "z").fp });
 		expect(await codeAsync(() => wrongTo.open(wrongTo.env))).toBe("bad_address");
-		// h.xshell_id differs from the frame (and from the joined xshell)
-		const other = generateShell("relay.example.com", "other");
-		const wrongShell = await sealed({ xshell_id: other.ask.xshellId });
-		expect(await codeAsync(() => wrongShell.open(wrongShell.env))).toBe("bad_address");
-		// key of another xshell
+		// h.parley_id differs from the frame (and from the joined parley)
+		const other = generateParley("relay.example.com", "other");
+		const wrongParley = await sealed({ parley_id: other.ask.parleyId });
+		expect(await codeAsync(() => wrongParley.open(wrongParley.env))).toBe("bad_address");
+		// key of another parley
 		expect(await codeAsync(() => open(env, { key: other.answer }))).toBe("bad_address");
 	});
 
@@ -726,7 +726,7 @@ describe("envelopes", () => {
 		const h = header(impostor, f.slave, f.ask);
 		const env = await sealEnvelope(h, { cert: f.master.cert, text: "x" }, f.slave.kem.pub, f.master.sign.seed);
 		const out = openEnvelope(env, {
-			frameXshellId: f.ask.xshellId,
+			frameParleyId: f.ask.parleyId,
 			selfFp: f.slave.fp,
 			key: f.answer,
 			kemPrivs: [f.slave.kem.priv],
@@ -741,7 +741,7 @@ describe("envelopes", () => {
 		const env = await sealEnvelope(header(old, f.slave, f.ask), { cert: old.cert, text: "x" }, f.slave.kem.pub, old.sign.seed);
 		expect(
 			await codeAsync(() =>
-				openEnvelope(env, { frameXshellId: f.ask.xshellId, selfFp: f.slave.fp, key: f.answer, kemPrivs: [f.slave.kem.priv], now: NOW }),
+				openEnvelope(env, { frameParleyId: f.ask.parleyId, selfFp: f.slave.fp, key: f.answer, kemPrivs: [f.slave.kem.priv], now: NOW }),
 			),
 		).toBe("stale_cert");
 	});
@@ -769,7 +769,7 @@ describe("envelopes", () => {
 			const env = await sealEnvelope(h, { cert: m.cert, text: "x" }, f.slave.kem.pub, m.sign.seed);
 			expect(
 				await codeAsync(() =>
-					openEnvelope(env, { frameXshellId: f.ask.xshellId, selfFp: f.slave.fp, key: f.answer, kemPrivs: [f.slave.kem.priv], now: NOW }),
+					openEnvelope(env, { frameParleyId: f.ask.parleyId, selfFp: f.slave.fp, key: f.answer, kemPrivs: [f.slave.kem.priv], now: NOW }),
 				),
 			).toBe(expected);
 		}
@@ -780,7 +780,7 @@ describe("envelopes", () => {
 		const env = await sealEnvelope(h, { cert: m.cert, text: "x" }, f.slave.kem.pub, m.sign.seed);
 		expect(
 			await codeAsync(() =>
-				openEnvelope(env, { frameXshellId: f.ask.xshellId, selfFp: f.slave.fp, key: f.answer, kemPrivs: [f.slave.kem.priv], now: NOW }),
+				openEnvelope(env, { frameParleyId: f.ask.parleyId, selfFp: f.slave.fp, key: f.answer, kemPrivs: [f.slave.kem.priv], now: NOW }),
 			),
 		).toBe("bad_timestamp");
 	});
@@ -841,10 +841,10 @@ describe("truncateToFit", () => {
 
 			const h = header(f.slave, f.master, f.ask, { kind: "response", reply_to: newMsgId() });
 			const env = await sealEnvelope(h, plain, f.master.kem.pub, f.slave.sign.seed);
-			const frame = JSON.stringify({ v: 1, t: "deliver", xshell_id: f.ask.xshellId, env });
+			const frame = JSON.stringify({ v: 1, t: "deliver", parley_id: f.ask.parleyId, env });
 			expect(new TextEncoder().encode(frame).length).toBeLessThanOrEqual(65536);
 			const out = await openEnvelope(JSON.parse(frame).env, {
-				frameXshellId: f.ask.xshellId,
+				frameParleyId: f.ask.parleyId,
 				selfFp: f.master.fp,
 				key: f.ask,
 				kemPrivs: [f.master.kem.priv],
@@ -883,7 +883,7 @@ describe("invitations", () => {
 		expect(newInviteCode()).not.toBe(a);
 	});
 
-	test("INVITE_RE rejects other shapes (non-v4, wrong variant, shell keys)", () => {
+	test("INVITE_RE rejects other shapes (non-v4, wrong variant, parley keys)", () => {
 		expect(INVITE_RE.test("3f2b8c4e-1a5d-4e7f-9b2a-6c8d0e1f2a3b")).toBe(true);
 		expect(INVITE_RE.test("3F2B8C4E-1A5D-4E7F-9B2A-6C8D0E1F2A3B")).toBe(true);
 		expect(INVITE_RE.test("3f2b8c4e-1a5d-1e7f-9b2a-6c8d0e1f2a3b")).toBe(false);
@@ -908,7 +908,7 @@ describe("invitations", () => {
 			sha256,
 			concatBytes(kInv, x25519.getSharedSecret(ePriv, peerPub)),
 			new Uint8Array(0),
-			concatBytes(new TextEncoder().encode("xshell invite box v2"), new TextEncoder().encode(inviteId), epkJ, epkM),
+			concatBytes(new TextEncoder().encode("xs-parley invite box v2"), new TextEncoder().encode(inviteId), epkJ, epkM),
 			32,
 		);
 
@@ -916,17 +916,17 @@ describe("invitations", () => {
 		const mine = inviteSecrets(newInviteCode());
 		const other = inviteSecrets(newInviteCode());
 		const eJ = generateKemPair();
-		const shellKey = formatShellKey(generateShell("relay.test", "infra").answer);
-		const box = sealInvite(mine.key, mine.inviteId, eJ.pub, shellKey);
-		expect(openInvite(mine.key, mine.inviteId, eJ.priv, box)).toBe(shellKey);
-		expect(b64uDecode(box).length).toBe(32 + 24 + 16 + new TextEncoder().encode(jcs({ v: 1, key: shellKey })).length);
+		const parleyKey = formatParleyKey(generateParley("relay.test", "infra").answer);
+		const box = sealInvite(mine.key, mine.inviteId, eJ.pub, parleyKey);
+		expect(openInvite(mine.key, mine.inviteId, eJ.priv, box)).toBe(parleyKey);
+		expect(b64uDecode(box).length).toBe(32 + 24 + 16 + new TextEncoder().encode(jcs({ v: 1, key: parleyKey })).length);
 		expect(code(() => openInvite(other.key, mine.inviteId, eJ.priv, box))).toBe("decrypt_failed");
 		expect(code(() => openInvite(mine.key, other.inviteId, eJ.priv, box))).toBe("decrypt_failed");
 		expect(code(() => openInvite(mine.key, mine.inviteId, generateKemPair().priv, box))).toBe("decrypt_failed");
 		expect(code(() => openInvite(mine.key, mine.inviteId, eJ.priv, "***"))).toBe("bad_encoding");
 		expect(code(() => openInvite(mine.key, mine.inviteId, eJ.priv, b64uEncode(new Uint8Array(70))))).toBe("bad_encoding");
 		// Each box carries a fresh master ephemeral key.
-		expect(sealInvite(mine.key, mine.inviteId, eJ.pub, shellKey).slice(0, 43)).not.toBe(box.slice(0, 43));
+		expect(sealInvite(mine.key, mine.inviteId, eJ.pub, parleyKey).slice(0, 43)).not.toBe(box.slice(0, 43));
 	});
 
 	test("forward secrecy: the UUID alone (K_inv, invite_id) cannot open a recorded box", () => {

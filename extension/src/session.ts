@@ -1,5 +1,5 @@
 /**
- * Lifecycle of the xshell memberships of one omp main session (§3, §6.3, §7.5): create / join / leave / rotate,
+ * Lifecycle of the parley memberships of one omp main session (§3, §6.3, §7.5): create / join / leave / rotate,
  * connection events, X25519 rotation and republication, resume and switch, system-prompt section.
  *
  * `index.ts` only wires omp events to this class; the protocol itself lives in `inbox.ts`.
@@ -10,9 +10,9 @@ import {
 	answerKey,
 	b64uDecode,
 	b64uEncode,
-	formatShellKey,
+	formatParleyKey,
 	generateKemPair,
-	generateShell,
+	generateParley,
 	inviteSecrets,
 	newInviteCode,
 	openInvite,
@@ -20,12 +20,12 @@ import {
 	sealInvite,
 	sealInviteRequest,
 	NAME_RE,
-	parseShellKey,
+	parseParleyKey,
 	type Rank,
 	sanitizeRole,
 	sealCertBox,
-	type ShellKey,
-	XshellCryptoError,
+	type ParleyKey,
+	ParleyCryptoError,
 } from "./crypto.ts";
 import { Inbox, type HostBridge, type PendingRecord } from "./inbox.ts";
 import {
@@ -42,11 +42,11 @@ import {
 	type PeerView,
 	readCertBox,
 } from "./keys.ts";
-import type { MemberRecord, Policy, ShellFile, Store } from "./store.ts";
+import type { MemberRecord, Policy, ParleyFile, Store } from "./store.ts";
 import { type Clock, type PresenceFrame, RelayError, relayUrl, type Transport, type TransportHandlers } from "./transport.ts";
 
 /** Custom session entry holding the per-session state (§7.5). */
-export const STATE_ENTRY = "xshell-state";
+export const STATE_ENTRY = "xsp-state";
 const PRUNE_INTERVAL_MS = 10 * 60_000;
 const FIRST_PUBLISH_WAIT_MS = 10_000;
 /** An invitation lives 5 minutes, in the memory of the master session that issued it. */
@@ -56,7 +56,7 @@ const INVITE_CONNECT_WAIT_MS = 10_000;
 
 /** What `pi.appendEntry` records: no secret (§7.5). */
 export interface SessionState {
-	shells: { xshell_id: string; fp: string }[];
+	parleys: { parley_id: string; fp: string }[];
 	pending: PendingRecord[];
 }
 
@@ -77,7 +77,7 @@ export interface JoinOutcome {
 	membership: Membership;
 }
 
-export interface ShellKeys {
+export interface ParleyKeys {
 	ask: string;
 	answer: string;
 }
@@ -102,7 +102,7 @@ interface Deferred<T> {
 
 /** An invitation this master session offers to the relay. Never persisted. */
 interface InviteEntry {
-	xshellId: string;
+	parleyId: string;
 	rank: Rank;
 	/** Opens the claimant's request and seals the answer (`inviteSecrets`). */
 	key: Uint8Array;
@@ -122,14 +122,14 @@ function errorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-export class XshellSession {
+export class ParleySession {
 	readonly inbox: Inbox;
 	private identity: Identity | undefined;
 	private readonly memberships = new Map<string, Membership>();
 	private readonly kems = new Map<string, { keeper: KemKeeper; timer: unknown }>();
 	private readonly firstPublish = new Map<string, Deferred<PublishResult>>();
 	private readonly everUp = new Set<string>();
-	/** `invite_id` → invitation, for the xshells this session is master of. */
+	/** `invite_id` → invitation, for the parleys this session is master of. */
 	private readonly invites = new Map<string, InviteEntry>();
 	/** Invitation dialogs run one at a time, in arrival order. */
 	private inviteConfirmChain: Promise<unknown> = Promise.resolve();
@@ -163,8 +163,8 @@ export class XshellSession {
 				requestActiveChanged: () => this.host.toolsChanged(),
 				sessionRef: () => this.host.sessionRef(),
 			},
-			audit: (xshellId, record) => this.audit.log(xshellId, record),
-			membership: xshellId => this.memberships.get(xshellId),
+			audit: (parleyId, record) => this.audit.log(parleyId, record),
+			membership: parleyId => this.memberships.get(parleyId),
 			identity: () => this.identity,
 			kemPrivs: endpoint => this.kems.get(endpoint)?.keeper.privs() ?? [],
 			destroyed: (m, byAlias, byFp) => this.onDestroyed(m, byAlias, byFp),
@@ -172,9 +172,9 @@ export class XshellSession {
 		const handlers: TransportHandlers = {
 			up: endpoint => this.onUp(endpoint),
 			down: (endpoint, reason) => this.onDown(endpoint, reason),
-			deliver: (endpoint, xshellId, env) => void this.inbox.handleDeliver(endpoint, xshellId, env),
+			deliver: (endpoint, parleyId, env) => void this.inbox.handleDeliver(endpoint, parleyId, env),
 			presence: (endpoint, frame) => this.onPresence(endpoint, frame),
-			replaced: (endpoint, xshellId) => this.onReplaced(endpoint, xshellId),
+			replaced: (endpoint, parleyId) => this.onReplaced(endpoint, parleyId),
 			problem: (endpoint, code, message) => this.onProblem(endpoint, code, message),
 			claimRequest: (endpoint, inviteId, claim, epk, req) => void this.onClaimRequest(endpoint, inviteId, claim, epk, req),
 		};
@@ -191,8 +191,8 @@ export class XshellSession {
 		return [...this.memberships.values()];
 	}
 
-	get(xshellId: string): Membership | undefined {
-		return this.memberships.get(xshellId);
+	get(parleyId: string): Membership | undefined {
+		return this.memberships.get(parleyId);
 	}
 
 	byName(name: string): Membership | undefined {
@@ -203,12 +203,12 @@ export class XshellSession {
 		return this.all().filter(m => m.key.rank === "A" && !m.suspended);
 	}
 
-	/** Names of the xshell tools the model should currently see (§7.2). */
+	/** Names of the xs-parley tools the model should currently see (§7.2). */
 	activeToolNames(): string[] {
 		const names: string[] = [];
-		if (this.memberships.size > 0) names.push("xshell_list");
-		if (this.masters().length > 0) names.push("xshell_ask", "xshell_answer");
-		if (this.inbox.hasActiveRequest) names.push("xshell_question");
+		if (this.memberships.size > 0) names.push("xsp_list");
+		if (this.masters().length > 0) names.push("xsp_ask", "xsp_answer");
+		if (this.inbox.hasActiveRequest) names.push("xsp_question");
 		return names;
 	}
 
@@ -216,7 +216,7 @@ export class XshellSession {
 
 	private snapshot(): SessionState {
 		return {
-			shells: this.all().map(m => ({ xshell_id: m.xshellId, fp: m.fp })),
+			parleys: this.all().map(m => ({ parley_id: m.parleyId, fp: m.fp })),
 			pending: this.inbox.exportPending(),
 		};
 	}
@@ -249,7 +249,7 @@ export class XshellSession {
 		entry.timer = this.clock.setTimeout(() => this.rotateKem(endpoint), entry.keeper.untilRotation());
 	}
 
-	/** New X25519 pair for `endpoint`, new certificates, new `join` for each xshell on it (§3). */
+	/** New X25519 pair for `endpoint`, new certificates, new `join` for each parley on it (§3). */
 	private rotateKem(endpoint: string): void {
 		this.kem(endpoint).rotate();
 		this.scheduleKemRotation(endpoint);
@@ -264,7 +264,7 @@ export class XshellSession {
 		} else {
 			this.kem(endpoint);
 		}
-		if (this.everUp.has(endpoint)) this.host.notify(`xshell : relai ${endpoint} reconnecté`, "info");
+		if (this.everUp.has(endpoint)) this.host.notify(`xs-parley : relai ${endpoint} reconnecté`, "info");
 		this.everUp.add(endpoint);
 		this.publishEndpoint(endpoint);
 		this.reofferInvites(endpoint);
@@ -273,7 +273,7 @@ export class XshellSession {
 
 	private onDown(endpoint: string, reason: string): void {
 		for (const m of this.all()) if (m.endpoint === endpoint) m.peers.resetOnline([]);
-		this.host.notify(`xshell : connexion au relai ${endpoint} perdue (${reason}) ; reconnexion automatique`, "warning");
+		this.host.notify(`xs-parley : connexion au relai ${endpoint} perdue (${reason}) ; reconnexion automatique`, "warning");
 	}
 
 	private onProblem(endpoint: string, code: string, message: string): void {
@@ -281,33 +281,33 @@ export class XshellSession {
 		// A create/join waiting on this endpoint reports the problem itself.
 		let answered = this.settleConnectWaiters(endpoint, { ok: false, error: text });
 		for (const m of this.all()) {
-			if (m.endpoint === endpoint) answered = this.settleFirst(m.xshellId, { ok: false, error: text }) || answered;
+			if (m.endpoint === endpoint) answered = this.settleFirst(m.parleyId, { ok: false, error: text }) || answered;
 		}
-		if (!answered) this.host.notify(`xshell : relai ${endpoint} : ${text}`, "error");
+		if (!answered) this.host.notify(`xs-parley : relai ${endpoint} : ${text}`, "error");
 	}
 
-	/** Hands `result` to the create/join waiting on `xshellId`, if any. */
-	private settleFirst(xshellId: string, result: PublishResult): boolean {
-		const waiter = this.firstPublish.get(xshellId);
+	/** Hands `result` to the create/join waiting on `parleyId`, if any. */
+	private settleFirst(parleyId: string, result: PublishResult): boolean {
+		const waiter = this.firstPublish.get(parleyId);
 		if (!waiter) return false;
-		this.firstPublish.delete(xshellId);
+		this.firstPublish.delete(parleyId);
 		waiter.resolve(result);
 		return true;
 	}
 
-	private onReplaced(endpoint: string, xshellId: string): void {
-		const m = this.memberships.get(xshellId);
+	private onReplaced(endpoint: string, parleyId: string): void {
+		const m = this.memberships.get(parleyId);
 		if (!m || m.endpoint !== endpoint) return;
 		m.suspended = true;
 		this.host.toolsChanged();
 		this.host.notify(
-			`xshell « ${m.name} » : une autre connexion a repris l'identité de cette session (autre processus omp sur la même session ?). Membre suspendu ; /xshell join <clé> pour le reprendre.`,
+			`parley « ${m.name} » : une autre connexion a repris l'identité de cette session (autre processus omp sur la même session ?). Membre suspendu ; /xsp join <clé> pour le reprendre.`,
 			"warning",
 		);
 	}
 
 	private onPresence(endpoint: string, frame: PresenceFrame): void {
-		const m = this.memberships.get(frame.xshell_id);
+		const m = this.memberships.get(frame.parley_id);
 		if (!m || m.endpoint !== endpoint || frame.fp === m.fp) return;
 		if (!frame.online) {
 			m.peers.setOnline(frame.fp, false);
@@ -323,8 +323,8 @@ export class XshellSession {
 	}
 
 	private rejectedCertBox(m: Membership, fp: string, error: unknown): void {
-		const code = error instanceof XshellCryptoError ? error.code : "internal";
-		this.audit.log(m.xshellId, { event: "rejected", reason: `cert_box: ${code}`, peer_fp: fp, ...this.host.sessionRef() });
+		const code = error instanceof ParleyCryptoError ? error.code : "internal";
+		this.audit.log(m.parleyId, { event: "rejected", reason: `cert_box: ${code}`, peer_fp: fp, ...this.host.sessionRef() });
 	}
 
 	// --- publication ----------------------------------------------------------------------------------------
@@ -337,23 +337,23 @@ export class XshellSession {
 
 	private async publishAndReport(m: Membership): Promise<void> {
 		const result = await this.publish(m);
-		if (this.settleFirst(m.xshellId, result)) return;
-		if (!result.ok) this.host.notify(`xshell « ${m.name} » : publication impossible : ${result.error}`, "error");
+		if (this.settleFirst(m.parleyId, result)) return;
+		if (!result.ok) this.host.notify(`parley « ${m.name} » : publication impossible : ${result.error}`, "error");
 	}
 
 	/** Signs a certificate with the current X25519 key and `join`s (§6.3), then refreshes the member list. */
 	async publish(m: Membership): Promise<PublishResult> {
 		const identity = this.identity;
-		if (!identity || m.suspended || this.memberships.get(m.xshellId) !== m) return { ok: false, error: "membre inactif" };
+		if (!identity || m.suspended || this.memberships.get(m.parleyId) !== m) return { ok: false, error: "membre inactif" };
 		try {
 			const cert = issueCert(m, identity, this.kem(m.endpoint).pub, this.clock.now());
 			m.cert = cert;
-			this.store.updateShell(m.xshellId, f => {
+			this.store.updateParley(m.parleyId, f => {
 				const rec = f.members[m.fp];
 				if (!rec) return false;
 				rec.cert = cert;
 			});
-			await this.transport.join(m.endpoint, m.xshellId, m.fp, sealCertBox(membershipGroupKey(m), m.xshellId, cert));
+			await this.transport.join(m.endpoint, m.parleyId, m.fp, sealCertBox(membershipGroupKey(m), m.parleyId, cert));
 		} catch (error) {
 			return { ok: false, error: errorText(error) };
 		}
@@ -364,7 +364,7 @@ export class XshellSession {
 	/** Asks the relay who is connected and updates certificates and presence. Best effort. */
 	async refreshMembers(m: Membership): Promise<void> {
 		try {
-			const frames = await this.transport.list(m.endpoint, m.xshellId);
+			const frames = await this.transport.list(m.endpoint, m.parleyId);
 			const online = new Set<string>();
 			for (const frame of frames) {
 				if (frame.fp === m.fp) continue;
@@ -387,8 +387,8 @@ export class XshellSession {
 
 	// --- building memberships --------------------------------------------------------------------------------
 
-	private savePeers(xshellId: string, peers: PeerBook): void {
-		this.store.updateShell(xshellId, file => {
+	private savePeers(parleyId: string, peers: PeerBook): void {
+		this.store.updateParley(parleyId, file => {
 			let changed = false;
 			for (const [fp, cert] of Object.entries(peers.snapshot())) {
 				const known = file.peers[fp];
@@ -401,13 +401,13 @@ export class XshellSession {
 		});
 	}
 
-	private build(file: ShellFile, fp: string): Membership {
+	private build(file: ParleyFile, fp: string): Membership {
 		const record = file.members[fp];
-		if (!record) throw new UserError("membre inconnu dans le fichier xshell");
-		const key = parseShellKey(record.key);
-		const peers = new PeerBook(file.peers, () => this.savePeers(file.xshell_id, peers));
+		if (!record) throw new UserError("membre inconnu dans le fichier de parley");
+		const key = parseParleyKey(record.key);
+		const peers = new PeerBook(file.peers, () => this.savePeers(file.parley_id, peers));
 		const m: Membership = {
-			xshellId: file.xshell_id,
+			parleyId: file.parley_id,
 			name: file.name,
 			relay: file.relay,
 			endpoint: relayUrl(file.relay, !file.notls),
@@ -426,8 +426,8 @@ export class XshellSession {
 
 	/** Registers the membership and publishes it as soon as the relay connection is up. */
 	private attach(m: Membership): void {
-		const previous = this.memberships.get(m.xshellId);
-		this.memberships.set(m.xshellId, m);
+		const previous = this.memberships.get(m.parleyId);
+		this.memberships.set(m.parleyId, m);
 		this.transport.acquire(m.endpoint);
 		// Release after acquiring: the connection must survive a replacement on the same endpoint.
 		if (previous) this.transport.release(previous.endpoint);
@@ -436,10 +436,10 @@ export class XshellSession {
 		this.host.toolsChanged();
 	}
 
-	/** Routes the next publication result for `xshellId` (or a relay problem) to the caller instead of a notification. */
-	private expectFirst(xshellId: string): Promise<PublishResult> {
+	/** Routes the next publication result for `parleyId` (or a relay problem) to the caller instead of a notification. */
+	private expectFirst(parleyId: string): Promise<PublishResult> {
 		const { promise, resolve } = Promise.withResolvers<PublishResult>();
-		this.firstPublish.set(xshellId, { promise, resolve });
+		this.firstPublish.set(parleyId, { promise, resolve });
 		return promise;
 	}
 
@@ -454,33 +454,33 @@ export class XshellSession {
 
 	/**
 	 * create/join/rotate are atomic: unless the relay accepts the first publication within the wait, the membership
-	 * and the xshell file go back to `rollback` (nothing, for a creation) and the command fails.
+	 * and the parley file go back to `rollback` (nothing, for a creation) and the command fails.
 	 */
 	private async publishOrRollback(
 		m: Membership,
 		first: Promise<PublishResult>,
-		rollback: { previous: Membership | undefined; file: ShellFile | undefined },
+		rollback: { previous: Membership | undefined; file: ParleyFile | undefined },
 	): Promise<void> {
 		const timer = this.clock.setTimeout(
-			() => this.settleFirst(m.xshellId, { ok: false, error: `relai ${m.relay} injoignable (aucune réponse en ${FIRST_PUBLISH_WAIT_MS / 1000} s)` }),
+			() => this.settleFirst(m.parleyId, { ok: false, error: `relai ${m.relay} injoignable (aucune réponse en ${FIRST_PUBLISH_WAIT_MS / 1000} s)` }),
 			FIRST_PUBLISH_WAIT_MS,
 		);
 		const result = await first;
 		this.clock.clearTimeout(timer);
 		if (result.ok) return;
-		if (this.transport.isUp(m.endpoint)) await this.transport.leave(m.endpoint, m.xshellId).catch(() => undefined);
+		if (this.transport.isUp(m.endpoint)) await this.transport.leave(m.endpoint, m.parleyId).catch(() => undefined);
 		const { previous, file } = rollback;
 		if (previous) {
 			this.attach(previous); // swaps back and releases m's endpoint
 		} else {
-			this.memberships.delete(m.xshellId);
-			this.inbox.reset(m.xshellId);
+			this.memberships.delete(m.parleyId);
+			this.inbox.reset(m.parleyId);
 			this.transport.release(m.endpoint);
 			this.host.toolsChanged();
 		}
 		this.dropKemIfUnused(m.endpoint);
-		if (file) this.store.writeShell(file);
-		else this.store.removeShell(m.xshellId);
+		if (file) this.store.writeParley(file);
+		else this.store.removeParley(m.parleyId);
 		this.persist();
 		throw new UserError(result.error);
 	}
@@ -506,7 +506,7 @@ export class XshellSession {
 			const alias = this.sessionAlias(m.fp);
 			if (alias === m.alias) continue;
 			m.alias = alias;
-			this.store.updateShell(m.xshellId, f => {
+			this.store.updateParley(m.parleyId, f => {
 				const rec = f.members[m.fp];
 				if (!rec) return false;
 				rec.alias = alias;
@@ -516,7 +516,7 @@ export class XshellSession {
 		if (changed.length === 0) return;
 		// A membership whose relay is down republishes with the new alias when it reconnects (onUp).
 		for (const m of changed) if (!m.suspended && this.transport.isUp(m.endpoint)) void this.publishAndReport(m);
-		this.host.notify(`xshell : alias « ${changed[0]!.alias} » dans ${changed.map(m => `« ${m.name} »`).join(", ")}`, "info");
+		this.host.notify(`xs-parley : alias « ${changed[0]!.alias} » dans ${changed.map(m => `« ${m.name} »`).join(", ")}`, "info");
 	}
 
 	private checkFormats(name: string | undefined, alias: string | undefined): void {
@@ -524,46 +524,46 @@ export class XshellSession {
 		if (alias !== undefined && !NAME_RE.test(alias)) throw new UserError("alias invalide : 1 à 32 caractères parmi A-Z a-z 0-9 _ -");
 	}
 
-	/** `xshellId` absent: a creation; present: a join of that xshell, which may keep its own name. */
-	private checkNames(name: string, alias: string, xshellId?: string): void {
+	/** `parleyId` absent: a creation; present: a join of that parley, which may keep its own name. */
+	private checkNames(name: string, alias: string, parleyId?: string): void {
 		this.checkFormats(name, alias);
-		const other = this.store.listShells().find(s => s.name === name && s.xshell_id !== xshellId);
+		const other = this.store.listParleys().find(s => s.name === name && s.parley_id !== parleyId);
 		if (!other) return;
 		const owner = this.byName(name) ? "à laquelle cette session appartient" : "tenue par une autre session de cette machine";
-		if (xshellId === undefined) {
+		if (parleyId === undefined) {
 			throw new UserError(
-				`le nom « ${name} » est déjà pris sur cette machine par la xshell ${other.xshell_id} (${owner}) : ` +
-					`${this.byName(name) ? "" : `/xshell join ${name} pour la rejoindre, ou `}choisis un autre nom`,
+				`le nom « ${name} » est déjà pris sur cette machine par la parley ${other.parley_id} (${owner}) : ` +
+					`${this.byName(name) ? "" : `/xsp join ${name} pour la rejoindre, ou `}choisis un autre nom`,
 			);
 		}
 		throw new UserError(
-			`le nom « ${name} » désigne déjà une autre xshell sur cette machine (${other.xshell_id}, ${owner}) : rejoins avec --name <autre-nom>`,
+			`le nom « ${name} » désigne déjà une autre parley sur cette machine (${other.parley_id}, ${owner}) : rejoins avec --name <autre-nom>`,
 		);
 	}
 
 	// --- commands -------------------------------------------------------------------------------------------
 
-	async createShell(options: {
+	async createParley(options: {
 		name: string;
 		relay: string;
 		notls?: boolean;
 		alias?: string;
 		role: string;
 		policy: Policy;
-	}): Promise<JoinOutcome & { keys: ShellKeys }> {
+	}): Promise<JoinOutcome & { keys: ParleyKeys }> {
 		const identity = this.ensureIdentity();
 		const alias = options.alias ?? this.sessionAlias(identity.fp);
 		this.checkNames(options.name, alias);
-		let generated: { ask: ShellKey; answer: ShellKey };
+		let generated: { ask: ParleyKey; answer: ParleyKey };
 		try {
-			generated = generateShell(options.relay, options.name);
+			generated = generateParley(options.relay, options.name);
 		} catch (error) {
 			throw new UserError(errorText(error));
 		}
-		const keys: ShellKeys = { ask: formatShellKey(generated.ask), answer: formatShellKey(generated.answer) };
-		const file: ShellFile = {
+		const keys: ParleyKeys = { ask: formatParleyKey(generated.ask), answer: formatParleyKey(generated.answer) };
+		const file: ParleyFile = {
 			v: 1,
-			xshell_id: generated.ask.xshellId,
+			parley_id: generated.ask.parleyId,
 			name: options.name,
 			relay: options.relay,
 			...(options.notls ? { notls: true as const } : {}),
@@ -578,16 +578,16 @@ export class XshellSession {
 			},
 			peers: {},
 		};
-		this.store.writeShell(file);
+		this.store.writeParley(file);
 		const m = this.build(file, identity.fp);
-		const first = this.expectFirst(m.xshellId);
+		const first = this.expectFirst(m.parleyId);
 		this.attach(m);
 		this.persist();
 		await this.publishOrRollback(m, first, { previous: undefined, file: undefined });
 		return { membership: m, keys };
 	}
 
-	async joinShell(options: {
+	async joinParley(options: {
 		key: string;
 		name?: string;
 		alias?: string;
@@ -595,40 +595,40 @@ export class XshellSession {
 		policy: Policy;
 		notls?: boolean;
 	}): Promise<JoinOutcome> {
-		let key: ShellKey;
+		let key: ParleyKey;
 		try {
-			key = parseShellKey(options.key);
+			key = parseParleyKey(options.key);
 		} catch (error) {
-			throw new UserError(error instanceof XshellCryptoError ? error.message : "clé xshell invalide");
+			throw new UserError(error instanceof ParleyCryptoError ? error.message : "clé de parley invalide");
 		}
 		const identity = this.ensureIdentity();
-		const existing = this.store.readShell(key.xshellId);
+		const existing = this.store.readParley(key.parleyId);
 		const before = existing ? structuredClone(existing) : undefined;
 		const name = options.name ?? existing?.name ?? key.name;
 		const alias = options.alias ?? this.sessionAlias(identity.fp);
-		this.checkNames(name, alias, key.xshellId);
+		this.checkNames(name, alias, key.parleyId);
 		const previousKey = existing?.members[identity.fp]?.key;
-		const keyChanged = previousKey !== undefined && previousKey !== formatShellKey(key);
-		const file: ShellFile = existing ?? { v: 1, xshell_id: key.xshellId, name, relay: key.relay, members: {}, peers: {} };
+		const keyChanged = previousKey !== undefined && previousKey !== formatParleyKey(key);
+		const file: ParleyFile = existing ?? { v: 1, parley_id: key.parleyId, name, relay: key.relay, members: {}, peers: {} };
 		file.name = name;
 		file.relay = key.relay;
-		// The latest join decides how this machine reaches the relay, for every local member of the xshell.
+		// The latest join decides how this machine reaches the relay, for every local member of the parley.
 		if (options.notls) file.notls = true;
 		else delete file.notls;
-		// A different key for the same xshell (after `rotate`) invalidates every cached certificate.
+		// A different key for the same parley (after `rotate`) invalidates every cached certificate.
 		if (existing && (keyChanged || existing.relay !== key.relay)) file.peers = {};
 		const record: MemberRecord = {
-			key: formatShellKey(key),
+			key: formatParleyKey(key),
 			alias,
 			...(options.alias ? {} : { autoAlias: true as const }),
 			role: sanitizeRole(options.role),
 			policy: options.policy,
 		};
 		file.members[identity.fp] = record;
-		this.store.writeShell(file);
+		this.store.writeParley(file);
 		const m = this.build(file, identity.fp);
-		const previous = this.memberships.get(key.xshellId);
-		const first = this.expectFirst(m.xshellId);
+		const previous = this.memberships.get(key.parleyId);
+		const first = this.expectFirst(m.parleyId);
 		this.attach(m);
 		this.persist();
 		await this.publishOrRollback(m, first, { previous, file: before });
@@ -638,7 +638,7 @@ export class XshellSession {
 	/**
 	 * `join <uuid>`: asks the master for the xs2 key through the relay (temporary connection) with a fresh X25519
 	 * pair, declaring alias and role; the master confirms before answering. Then runs the regular, atomic
-	 * `joinShell` with the key and the same alias. The invitation is single use: once confirmed or refused it is gone.
+	 * `joinParley` with the key and the same alias. The invitation is single use: once confirmed or refused it is gone.
 	 */
 	async joinWithInvite(options: {
 		code: string;
@@ -666,12 +666,12 @@ export class XshellSession {
 		} catch (error) {
 			throw new UserError(errorText(error));
 		}
-		// The claim connection stays referenced until `joinShell` holds its own: no needless reconnection.
+		// The claim connection stays referenced until `joinParley` holds its own: no needless reconnection.
 		this.transport.acquire(endpoint);
 		try {
 			await this.waitConnected(endpoint, options.relay);
 			const ephemeral = generateKemPair();
-			let shellKey: string;
+			let parleyKey: string;
 			try {
 				let box: string;
 				try {
@@ -691,7 +691,7 @@ export class XshellSession {
 					throw new UserError(`invitation impossible : ${errorText(error)}`);
 				}
 				try {
-					shellKey = openInvite(secrets.key, secrets.inviteId, ephemeral.priv, box);
+					parleyKey = openInvite(secrets.key, secrets.inviteId, ephemeral.priv, box);
 				} catch {
 					throw new UserError("invitation illisible : réponse invalide du master");
 				}
@@ -699,11 +699,11 @@ export class XshellSession {
 				ephemeral.priv.fill(0);
 			}
 			try {
-				return await this.joinShell({
-					key: shellKey,
+				return await this.joinParley({
+					key: parleyKey,
 					role,
 					policy: options.policy,
-					// Without --as, joinShell derives the same alias and keeps it following the session name.
+					// Without --as, joinParley derives the same alias and keeps it following the session name.
 					...(options.alias ? { alias: options.alias } : {}),
 					...(options.notls ? { notls: true } : {}),
 					...(options.name ? { name: options.name } : {}),
@@ -747,18 +747,18 @@ export class XshellSession {
 	}
 
 	/**
-	 * Any master: tells every member online that the xshell is destroyed (signed `destroy` envelope), then
+	 * Any master: tells every member online that the parley is destroyed (signed `destroy` envelope), then
 	 * leaves it and deletes the local file for every session of this machine. Members offline keep their copy.
 	 */
-	async destroyShell(name: string): Promise<{ notified: number; failed: number; offline: number }> {
+	async destroyParley(name: string): Promise<{ notified: number; failed: number; offline: number }> {
 		const m = this.requireMember(name);
-		if (m.key.rank !== "A") throw new UserError("seul un master peut détruire la xshell");
+		if (m.key.rank !== "A") throw new UserError("seul un master peut détruire la parley");
 		await this.refreshMembers(m);
 		const peers = m.peers.views(m.fp, this.clock.now());
 		const online = peers.filter(p => p.online);
 		if (this.host.hasUI()) {
 			const confirmed = await this.host.confirm(
-				`Détruire la xshell « ${name} » ?`,
+				`Détruire la parley « ${name} » ?`,
 				[
 					`${online.length} membre(s) en ligne la quitteront et supprimeront leur copie${online.length > 0 ? ` : ${online.map(p => p.alias).join(", ")}` : ""}.`,
 					`${peers.length - online.length} membre(s) hors ligne garderont la leur (pas de boîte aux lettres).`,
@@ -776,64 +776,64 @@ export class XshellSession {
 				// Gone meanwhile: counted as not notified.
 			}
 		}
-		this.audit.log(m.xshellId, { event: "destroy_sent", status: `${notified}/${online.length}`, ...this.host.sessionRef() });
-		await this.leaveShell(name);
-		this.store.removeShell(m.xshellId);
+		this.audit.log(m.parleyId, { event: "destroy_sent", status: `${notified}/${online.length}`, ...this.host.sessionRef() });
+		await this.leaveParley(name);
+		this.store.removeParley(m.parleyId);
 		return { notified, failed: online.length - notified, offline: peers.length - online.length };
 	}
 
-	/** A verified master destroyed the xshell: leave it (this session's record; the file goes with the last one). */
+	/** A verified master destroyed the parley: leave it (this session's record; the file goes with the last one). */
 	private onDestroyed(m: Membership, byAlias: string, byFp: string): void {
-		if (this.memberships.get(m.xshellId) !== m) return;
-		this.host.notify(`xshell « ${m.name} » détruite par le master ${byAlias} (${byFp}) : quittée et supprimée de cette session`, "warning");
-		void this.leaveShell(m.name).catch(() => undefined);
+		if (this.memberships.get(m.parleyId) !== m) return;
+		this.host.notify(`parley « ${m.name} » détruite par le master ${byAlias} (${byFp}) : quittée et supprimée de cette session`, "warning");
+		void this.leaveParley(m.name).catch(() => undefined);
 	}
 
-	async leaveShell(name: string): Promise<void> {
+	async leaveParley(name: string): Promise<void> {
 		const m = this.byName(name);
 		if (!m) {
 			this.leaveUnloaded(name);
 			return;
 		}
 		// No grant may slip out while the relay answers the leave.
-		this.forgetInvitesOf(m.xshellId);
+		this.forgetInvitesOf(m.parleyId);
 		try {
-			if (this.transport.isUp(m.endpoint) && !m.suspended) await this.transport.leave(m.endpoint, m.xshellId);
+			if (this.transport.isUp(m.endpoint) && !m.suspended) await this.transport.leave(m.endpoint, m.parleyId);
 		} catch {
 			// The relay forgets us when the connection closes anyway.
 		}
-		this.inbox.reset(m.xshellId);
-		this.memberships.delete(m.xshellId);
-		this.firstPublish.delete(m.xshellId);
+		this.inbox.reset(m.parleyId);
+		this.memberships.delete(m.parleyId);
+		this.firstPublish.delete(m.parleyId);
 		this.transport.release(m.endpoint);
 		this.dropKemIfUnused(m.endpoint);
-		const file = this.store.readShell(m.xshellId);
+		const file = this.store.readParley(m.parleyId);
 		if (file) {
 			delete file.members[m.fp];
-			if (Object.keys(file.members).length === 0) this.store.removeShell(m.xshellId);
-			else this.store.writeShell(file);
+			if (Object.keys(file.members).length === 0) this.store.removeParley(m.parleyId);
+			else this.store.writeParley(file);
 		}
 		this.persist();
 		this.host.toolsChanged();
 	}
 
 	/**
-	 * `leave` for a xshell this session could not load, e.g. a key in an obsolete format (`xs1`): the file is
+	 * `leave` for a parley this session could not load, e.g. a key in an obsolete format (`xs1`): the file is
 	 * removed when no member key in it can be read any more. A readable file belongs to other local sessions.
 	 */
 	private leaveUnloaded(name: string): void {
-		const file = this.store.listShells().find(s => s.name === name);
-		if (!file) throw new UserError(`xshell inconnue : ${name}`);
+		const file = this.store.listParleys().find(s => s.name === name);
+		if (!file) throw new UserError(`parley inconnue : ${name}`);
 		const readable = Object.values(file.members).some(rec => {
 			try {
-				parseShellKey(rec.key);
+				parseParleyKey(rec.key);
 				return true;
 			} catch {
 				return false;
 			}
 		});
-		if (readable) throw new UserError(`cette session n'est pas membre de « ${name} » (/xshell join ${name} pour la rejoindre)`);
-		this.store.removeShell(file.xshell_id);
+		if (readable) throw new UserError(`cette session n'est pas membre de « ${name} » (/xsp join ${name} pour la rejoindre)`);
+		this.store.removeParley(file.parley_id);
 		this.persist();
 	}
 
@@ -847,50 +847,50 @@ export class XshellSession {
 	}
 
 	/**
-	 * The membership `name` of this session. A xshell this session has not joined, but that another local session
+	 * The membership `name` of this session. A parley this session has not joined, but that another local session
 	 * holds (its file is on disk), gets a hint: membership is per omp session (§7.5).
 	 */
 	requireMember(name: string): Membership {
 		const m = this.byName(name);
 		if (m) return m;
 		if (this.localFile(name)) {
-			throw new UserError(`cette session n'est pas membre de « ${name} », qui existe sur cette machine : /xshell join ${name} pour la rejoindre`);
+			throw new UserError(`cette session n'est pas membre de « ${name} », qui existe sur cette machine : /xsp join ${name} pour la rejoindre`);
 		}
-		throw new UserError(`xshell inconnue : ${name}`);
+		throw new UserError(`parley inconnue : ${name}`);
 	}
 
-	private localFile(name: string): ShellFile | undefined {
-		return this.store.listShells().find(s => s.name === name);
+	private localFile(name: string): ParleyFile | undefined {
+		return this.store.listParleys().find(s => s.name === name);
 	}
 
-	/** Names of the xshells of this machine this session has not joined (`join <nom>` candidates). */
+	/** Names of the parleys of this machine this session has not joined (`join <nom>` candidates). */
 	localNames(): string[] {
 		return this.store
-			.listShells()
+			.listParleys()
 			.map(s => s.name)
 			.filter(name => !this.byName(name));
 	}
 
 	/**
-	 * `join <nom>`: joins, with this session's own identity, a xshell another local session already belongs to,
+	 * `join <nom>`: joins, with this session's own identity, a parley another local session already belongs to,
 	 * using the best key found in its file (ask if any, else answer). The key never leaves the machine.
 	 */
 	async joinLocal(options: { name: string; alias?: string; role: string; policy: Policy; notls?: boolean }): Promise<JoinOutcome> {
 		if (this.byName(options.name)) throw new UserError(`cette session est déjà membre de « ${options.name} »`);
 		const file = this.localFile(options.name);
-		if (!file) throw new UserError(`xshell inconnue : ${options.name} (ni clé xs2:, ni UUID d'invitation, ni xshell de cette machine)`);
-		let best: ShellKey | undefined;
+		if (!file) throw new UserError(`parley inconnue : ${options.name} (ni clé xs2:, ni UUID d'invitation, ni parley de cette machine)`);
+		let best: ParleyKey | undefined;
 		for (const rec of Object.values(file.members)) {
 			try {
-				const key = parseShellKey(rec.key);
+				const key = parseParleyKey(rec.key);
 				if (!best || (key.rank === "A" && best.rank === "S")) best = key;
 			} catch {
 				// Obsolete or corrupt key: try the next member.
 			}
 		}
-		if (!best) throw new UserError(`« ${options.name} » n'a aucune clé lisible (format xs1 ?) : /xshell leave ${options.name} puis recréer la xshell`);
-		return this.joinShell({
-			key: formatShellKey(best),
+		if (!best) throw new UserError(`« ${options.name} » n'a aucune clé lisible (format xs1 ?) : /xsp leave ${options.name} puis recréer la parley`);
+		return this.joinParley({
+			key: formatParleyKey(best),
 			name: file.name,
 			role: options.role,
 			policy: options.policy,
@@ -902,34 +902,34 @@ export class XshellSession {
 	setPolicy(name: string, policy: Policy): void {
 		const m = this.requireMember(name);
 		m.policy = policy;
-		this.store.updateShell(m.xshellId, f => {
+		this.store.updateParley(m.parleyId, f => {
 			const rec = f.members[m.fp];
 			if (!rec) return false;
 			rec.policy = policy;
 		});
 	}
 
-	/** Any master: new rank seeds, same xshell_id (§4.3). Other local memberships are dropped (their key is void). */
-	async rotateShell(name: string): Promise<{ keys: ShellKeys; dropped: number }> {
+	/** Any master: new rank seeds, same parley_id (§4.3). Other local memberships are dropped (their key is void). */
+	async rotateParley(name: string): Promise<{ keys: ParleyKeys; dropped: number }> {
 		const m = this.requireMember(name);
-		if (m.key.rank !== "A") throw new UserError("seul un master peut régénérer les clés de la xshell");
+		if (m.key.rank !== "A") throw new UserError("seul un master peut régénérer les clés de la parley");
 		// The invitations carry the keys about to be replaced.
-		this.forgetInvitesOf(m.xshellId);
-		const fresh = generateShell(m.relay, m.name);
-		const ask = { ...fresh.ask, xshellId: m.xshellId };
-		const keys: ShellKeys = { ask: formatShellKey(ask), answer: formatShellKey(answerKey(ask)) };
+		this.forgetInvitesOf(m.parleyId);
+		const fresh = generateParley(m.relay, m.name);
+		const ask = { ...fresh.ask, parleyId: m.parleyId };
+		const keys: ParleyKeys = { ask: formatParleyKey(ask), answer: formatParleyKey(answerKey(ask)) };
 		let dropped = 0;
-		const file = this.store.readShell(m.xshellId);
-		if (!file) throw new UserError("fichier xshell introuvable");
+		const file = this.store.readParley(m.parleyId);
+		if (!file) throw new UserError("fichier de parley introuvable");
 		const before = structuredClone(file);
 		const own = file.members[m.fp];
-		if (!own) throw new UserError("membre introuvable dans le fichier xshell");
+		if (!own) throw new UserError("membre introuvable dans le fichier de parley");
 		dropped = Object.keys(file.members).length - 1;
 		file.members = { [m.fp]: { ...own, key: keys.ask } };
 		file.peers = {};
-		this.store.writeShell(file);
+		this.store.writeParley(file);
 		const rebuilt = this.build(file, m.fp);
-		const first = this.expectFirst(rebuilt.xshellId);
+		const first = this.expectFirst(rebuilt.parleyId);
 		this.attach(rebuilt);
 		this.persist();
 		await this.publishOrRollback(rebuilt, first, { previous: m, file: before });
@@ -938,24 +938,24 @@ export class XshellSession {
 
 	/** Keys the user may re-display (§7.1): a master both (its key holds both seeds), a slave its answer key. */
 	keysOf(m: Membership): { label: string; key: string }[] {
-		if (m.key.rank === "S") return [{ label: "clé answer (slave)", key: formatShellKey(m.key) }];
+		if (m.key.rank === "S") return [{ label: "clé answer (slave)", key: formatParleyKey(m.key) }];
 		return [
-			{ label: "clé ask (master)", key: formatShellKey(m.key) },
-			{ label: "clé answer (slave)", key: formatShellKey(answerKey(m.key)) },
+			{ label: "clé ask (master)", key: formatParleyKey(m.key) },
+			{ label: "clé answer (slave)", key: formatParleyKey(answerKey(m.key)) },
 		];
 	}
 
 	// --- invitations (master side) ---------------------------------------------------------------------------
 
 	/**
-	 * Two single-use invitations for xshell `name` (one per rank), valid 5 minutes, offered to the relay. The relay
+	 * Two single-use invitations for parley `name` (one per rank), valid 5 minutes, offered to the relay. The relay
 	 * never sees the UUIDs: it routes by `invite_id` and relays opaque, UUID-sealed requests and boxes. Each claim
 	 * is confirmed by the user before the key leaves.
 	 */
 	async createInvites(name: string): Promise<{ membership: Membership; master: string; slave: string }> {
 		const m = this.requireMember(name);
 		if (m.key.rank !== "A") throw new UserError("seul un master peut inviter");
-		if (m.suspended) throw new UserError(`xshell « ${name} » suspendue : /xshell join <clé> pour la reprendre avant d'inviter`);
+		if (m.suspended) throw new UserError(`parley « ${name} » suspendue : /xsp join <clé> pour la reprendre avant d'inviter`);
 		if (!this.transport.isUp(m.endpoint)) throw new UserError(`relai ${m.relay} non connecté : invitation impossible pour le moment`);
 		const codes: Record<Rank, string> = { A: newInviteCode(), S: newInviteCode() };
 		const ids: string[] = [];
@@ -963,7 +963,7 @@ export class XshellSession {
 			const { inviteId, key } = inviteSecrets(codes[rank]);
 			ids.push(inviteId);
 			this.invites.set(inviteId, {
-				xshellId: m.xshellId,
+				parleyId: m.parleyId,
 				rank,
 				key,
 				endpoint: m.endpoint,
@@ -981,10 +981,10 @@ export class XshellSession {
 		if (ids.some(id => !this.invites.has(id))) {
 			// leave/rotate ran while the relay was answering.
 			for (const id of ids) this.forgetInvite(id, true);
-			throw new UserError(`xshell « ${name} » modifiée pendant la création des invitations : recommence`);
+			throw new UserError(`parley « ${name} » modifiée pendant la création des invitations : recommence`);
 		}
 		for (const rank of ["A", "S"] as const) {
-			this.audit.log(m.xshellId, { event: "invite_created", rank: rankLabel(rank), ...this.host.sessionRef() });
+			this.audit.log(m.parleyId, { event: "invite_created", rank: rankLabel(rank), ...this.host.sessionRef() });
 		}
 		return { membership: m, master: codes.A, slave: codes.S };
 	}
@@ -998,8 +998,8 @@ export class XshellSession {
 		if (withdraw) void this.transport.withdraw(entry.endpoint, inviteId).catch(() => undefined);
 	}
 
-	private forgetInvitesOf(xshellId: string): void {
-		for (const [id, entry] of [...this.invites]) if (entry.xshellId === xshellId) this.forgetInvite(id, true);
+	private forgetInvitesOf(parleyId: string): void {
+		for (const [id, entry] of [...this.invites]) if (entry.parleyId === parleyId) this.forgetInvite(id, true);
 	}
 
 	/** The relay forgets offers with the connection: after a reconnection, offer the still valid ones again. */
@@ -1013,9 +1013,9 @@ export class XshellSession {
 		await this.transport.refuse(endpoint, claim).catch(() => undefined);
 	}
 
-	/** The ask key of the xshell an invitation belongs to, if this session can still hand it out. */
+	/** The ask key of the parley an invitation belongs to, if this session can still hand it out. */
 	private issuerKey(entry: InviteEntry, endpoint: string): AskKey | undefined {
-		const m = this.memberships.get(entry.xshellId);
+		const m = this.memberships.get(entry.parleyId);
 		if (!m || m.endpoint !== endpoint || m.key.rank !== "A" || m.suspended) return undefined;
 		return m.key;
 	}
@@ -1040,7 +1040,7 @@ export class XshellSession {
 		}
 		const rank = rankLabel(entry.rank);
 		const refused = async (reason: string, declared?: string, status = "refused"): Promise<void> => {
-			this.audit.log(entry.xshellId, {
+			this.audit.log(entry.parleyId, {
 				event: "invite_refused",
 				rank,
 				status,
@@ -1071,18 +1071,18 @@ export class XshellSession {
 			return;
 		}
 		entry.confirming = true;
-		const m = this.memberships.get(entry.xshellId)!;
+		const m = this.memberships.get(entry.parleyId)!;
 		const interactive = this.host.hasUI();
 		const accepted =
 			interactive &&
 			(await this.confirmInvite(
-				`xshell « ${m.name} » : invitation`,
+				`parley « ${m.name} » : invitation`,
 				[
 					`Une session demande à rejoindre « ${m.name} » en ${rank}.`,
 					`Alias déclaré : ${hello.alias}`,
 					`Rôle déclaré : ${hello.role || "(vide)"}`,
 					"Ces informations sont déclaratives, rien ne les vérifie.",
-					`Accepter transmet la clé ${rank} de la xshell.`,
+					`Accepter transmet la clé ${rank} de la parley.`,
 				].join("\n"),
 			));
 		// Single use: whatever the decision, the invitation is gone before anything else asynchronous happens.
@@ -1107,18 +1107,18 @@ export class XshellSession {
 		}
 		try {
 			// Derived now, not when the invitation was created: the key of the rank as it stands at the grant.
-			const box = sealInvite(entry.key, inviteId, epkJ, formatShellKey(entry.rank === "A" ? key : answerKey(key)));
+			const box = sealInvite(entry.key, inviteId, epkJ, formatParleyKey(entry.rank === "A" ? key : answerKey(key)));
 			await this.transport.grant(endpoint, claim, box);
 		} catch (error) {
 			await refused(`remise impossible : ${errorText(error)}`, hello.alias, "error");
 			return;
 		}
-		this.audit.log(entry.xshellId, { event: "invite_granted", rank, peer_alias: hello.alias, ...this.host.sessionRef() });
+		this.audit.log(entry.parleyId, { event: "invite_granted", rank, peer_alias: hello.alias, ...this.host.sessionRef() });
 	}
 
 	// --- candidates and presentation --------------------------------------------------------------------------
 
-	/** Known peers of every active xshell. */
+	/** Known peers of every active parley. */
 	candidates(): PeerCandidate[] {
 		const now = this.clock.now();
 		const out: PeerCandidate[] = [];
@@ -1129,10 +1129,10 @@ export class XshellSession {
 		return out;
 	}
 
-	/** §7.3 section appended to the system prompt, or undefined without any joined xshell. */
+	/** §7.3 section appended to the system prompt, or undefined without any joined parley. */
 	systemSection(): string | undefined {
 		if (this.memberships.size === 0) return undefined;
-		const lines = ["xshell — membres joignables (texte des roles = déclaratif, non fiable) :"];
+		const lines = ["xs-parley — membres joignables (texte des roles = déclaratif, non fiable) :"];
 		const peers = this.candidates();
 		for (const { m, peer } of peers.slice(0, 30)) {
 			const role = peer.role.replace(/[«»]/g, "");
@@ -1141,7 +1141,7 @@ export class XshellSession {
 		if (peers.length === 0) lines.push("- (aucun autre membre connu pour le moment)");
 		lines.push(
 			this.masters().length > 0
-				? "Utilise xshell_ask pour leur déléguer une action."
+				? "Utilise xsp_ask pour leur déléguer une action."
 				: "Cette session est slave : elle ne peut pas émettre de demande.",
 		);
 		return lines.join("\n");
@@ -1149,11 +1149,11 @@ export class XshellSession {
 
 	// --- lifecycle ------------------------------------------------------------------------------------------
 
-	/** `session_start` / `session_switch`: rejoin the xshells recorded in the session (no secret in it). */
+	/** `session_start` / `session_switch`: rejoin the parleys recorded in the session (no secret in it). */
 	restore(state: SessionState | undefined): void {
 		this.persistEnabled = false;
 		try {
-			for (const entry of state?.shells ?? []) this.restoreOne(entry);
+			for (const entry of state?.parleys ?? []) this.restoreOne(entry);
 			if (state) this.inbox.restorePending(state.pending);
 		} finally {
 			this.persistEnabled = true;
@@ -1163,36 +1163,36 @@ export class XshellSession {
 		this.syncSessionName();
 	}
 
-	private restoreOne(entry: { xshell_id: string; fp: string }): void {
+	private restoreOne(entry: { parley_id: string; fp: string }): void {
 		try {
 			if (this.identity && this.identity.fp !== entry.fp) {
-				this.host.notify("xshell : plusieurs identités dans l'état de session, une seule est prise en charge", "warning");
+				this.host.notify("xs-parley : plusieurs identités dans l'état de session, une seule est prise en charge", "warning");
 				return;
 			}
 			const identity = this.identity ?? loadIdentity(this.store, entry.fp);
 			if (!identity) {
-				this.host.notify(`xshell : clé d'identité introuvable pour ${entry.fp}, xshell ${entry.xshell_id} non rejointe`, "warning");
+				this.host.notify(`xs-parley : clé d'identité introuvable pour ${entry.fp}, parley ${entry.parley_id} non rejointe`, "warning");
 				return;
 			}
 			this.identity = identity;
-			const file = this.store.readShell(entry.xshell_id);
+			const file = this.store.readParley(entry.parley_id);
 			if (!file?.members[entry.fp]) {
-				this.host.notify(`xshell : fichier local de la xshell ${entry.xshell_id} introuvable, non rejointe`, "warning");
+				this.host.notify(`xs-parley : fichier local de la parley ${entry.parley_id} introuvable, non rejointe`, "warning");
 				return;
 			}
 			this.attach(this.build(file, entry.fp));
 		} catch (error) {
-			const name = this.readableName(entry.xshell_id);
+			const name = this.readableName(entry.parley_id);
 			this.host.notify(
-				`xshell : reprise de ${name ? `« ${name} » (${entry.xshell_id})` : entry.xshell_id} impossible : ${errorText(error)}${name ? ` ; /xshell leave ${name} pour la supprimer` : ""}`,
+				`xs-parley : reprise de ${name ? `« ${name} » (${entry.parley_id})` : entry.parley_id} impossible : ${errorText(error)}${name ? ` ; /xsp leave ${name} pour la supprimer` : ""}`,
 				"error",
 			);
 		}
 	}
 
-	private readableName(xshellId: string): string | undefined {
+	private readableName(parleyId: string): string | undefined {
 		try {
-			return this.store.readShell(xshellId)?.name;
+			return this.store.readParley(parleyId)?.name;
 		} catch {
 			return undefined;
 		}

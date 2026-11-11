@@ -1,5 +1,5 @@
 /**
- * xshell cryptography (SPEC §3–§5): encodings, shell keys, member certificates,
+ * xs-parley cryptography (SPEC §3–§5): encodings, parley keys, member certificates,
  * cert boxes and end-to-end envelopes. Pure functions, no I/O, no global state.
  */
 import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
@@ -18,20 +18,20 @@ export type CryptoErrorCode =
 	| "bad_encoding"
 	| "bad_structure"
 	| "stale_cert"
-	| "wrong_xshell"
+	| "wrong_parley"
 	| "bad_signature"
 	| "fp_mismatch"
 	| "decrypt_failed"
 	| "bad_timestamp"
 	| "bad_address";
 
-export class XshellCryptoError extends Error {
+export class ParleyCryptoError extends Error {
 	constructor(
 		readonly code: CryptoErrorCode,
 		message?: string,
 	) {
 		super(message ?? code);
-		this.name = "XshellCryptoError";
+		this.name = "ParleyCryptoError";
 	}
 }
 
@@ -51,14 +51,14 @@ const B64U_RE = /^[A-Za-z0-9_-]*$/;
 /** Strict base64url (no padding, canonical trailing bits). */
 export function b64uDecode(s: string, expectedLength?: number): Uint8Array {
 	if (typeof s !== "string" || !B64U_RE.test(s) || s.length % 4 === 1) {
-		throw new XshellCryptoError("bad_encoding", "base64url invalide");
+		throw new ParleyCryptoError("bad_encoding", "base64url invalide");
 	}
 	const out = new Uint8Array(Buffer.from(s, "base64url"));
 	if (b64uEncode(out) !== s) {
-		throw new XshellCryptoError("bad_encoding", "base64url non canonique");
+		throw new ParleyCryptoError("bad_encoding", "base64url non canonique");
 	}
 	if (expectedLength !== undefined && out.length !== expectedLength) {
-		throw new XshellCryptoError("bad_encoding", `longueur attendue ${expectedLength} octets, reçu ${out.length}`);
+		throw new ParleyCryptoError("bad_encoding", `longueur attendue ${expectedLength} octets, reçu ${out.length}`);
 	}
 	return out;
 }
@@ -69,9 +69,9 @@ export function jcs(value: unknown): string {
 	try {
 		out = canonicalize(value);
 	} catch (e) {
-		throw new XshellCryptoError("bad_structure", `JSON non canonicalisable : ${(e as Error).message}`);
+		throw new ParleyCryptoError("bad_structure", `JSON non canonicalisable : ${(e as Error).message}`);
 	}
-	if (out === undefined) throw new XshellCryptoError("bad_structure", "valeur non sérialisable");
+	if (out === undefined) throw new ParleyCryptoError("bad_structure", "valeur non sérialisable");
 	return out;
 }
 
@@ -83,12 +83,12 @@ export function formatTimestamp(d: Date): string {
 
 export function parseTimestamp(s: string): Date {
 	if (typeof s !== "string" || !TIMESTAMP_RE.test(s)) {
-		throw new XshellCryptoError("bad_timestamp", "horodatage non conforme au profil");
+		throw new ParleyCryptoError("bad_timestamp", "horodatage non conforme au profil");
 	}
 	const d = new Date(s);
 	// Rejects calendar overflows such as 2026-02-30 (Date normalizes them).
 	if (Number.isNaN(d.getTime()) || d.toISOString() !== s) {
-		throw new XshellCryptoError("bad_timestamp", "horodatage invalide");
+		throw new ParleyCryptoError("bad_timestamp", "horodatage invalide");
 	}
 	return d;
 }
@@ -134,7 +134,7 @@ function copy(u: Uint8Array): Uint8Array {
 
 function requireLength(u: Uint8Array, n: number, what: string): void {
 	if (!(u instanceof Uint8Array) || u.length !== n) {
-		throw new XshellCryptoError("bad_key", `${what} : ${n} octets attendus`);
+		throw new ParleyCryptoError("bad_key", `${what} : ${n} octets attendus`);
 	}
 }
 
@@ -189,12 +189,12 @@ function verifyBytes(sig: Uint8Array, message: Uint8Array, pub: Uint8Array): boo
 }
 
 // ---------------------------------------------------------------------------
-// Shell keys (§4.1)
+// Parley keys (§4.1)
 // ---------------------------------------------------------------------------
 
-interface ShellKeyBase {
+interface ParleyKeyBase {
 	relay: string;
-	xshellId: string;
+	parleyId: string;
 	name: string;
 }
 
@@ -202,52 +202,52 @@ interface ShellKeyBase {
  * A master (ask) key holds both rank seeds, so every master can derive the answer key (`answerKey`); a slave
  * (answer) key holds its seed and the ask public key only.
  */
-export type ShellKey =
-	| (ShellKeyBase & { rank: "A"; seed: Uint8Array; answerSeed: Uint8Array })
-	| (ShellKeyBase & { rank: "S"; seed: Uint8Array; askPub: Uint8Array });
-export type AskKey = Extract<ShellKey, { rank: "A" }>;
-export type AnswerKey = Extract<ShellKey, { rank: "S" }>;
+export type ParleyKey =
+	| (ParleyKeyBase & { rank: "A"; seed: Uint8Array; answerSeed: Uint8Array })
+	| (ParleyKeyBase & { rank: "S"; seed: Uint8Array; askPub: Uint8Array });
+export type AskKey = Extract<ParleyKey, { rank: "A" }>;
+export type AnswerKey = Extract<ParleyKey, { rank: "S" }>;
 
 const RELAY_RE = /^(?:[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?$/;
 const KEY_VERSION = "xs2";
 
 function badKey(message: string): never {
-	throw new XshellCryptoError("bad_key", message);
+	throw new ParleyCryptoError("bad_key", message);
 }
 
-/** `xs2:<relay>:<xshell_id>:<name>:A:<seed_ask>:<seed_answer>` or `xs2:<relay>:<xshell_id>:<name>:S:<seed_answer>:<pub_ask>`. */
-export function parseShellKey(text: string): ShellKey {
-	if (typeof text !== "string") badKey("clé xshell invalide");
+/** `xs2:<relay>:<parley_id>:<name>:A:<seed_ask>:<seed_answer>` or `xs2:<relay>:<parley_id>:<name>:S:<seed_answer>:<pub_ask>`. */
+export function parseParleyKey(text: string): ParleyKey {
+	if (typeof text !== "string") badKey("clé de parley invalide");
 	const s = text.trim();
-	if (s.startsWith("xs1:")) badKey("clé xshell d'un format obsolète (xs1) : le créateur doit recréer la xshell");
-	if (!s.startsWith(`${KEY_VERSION}:`)) badKey(`clé xshell invalide : préfixe ${KEY_VERSION}: attendu`);
+	if (s.startsWith("xs1:")) badKey("clé de parley d'un format obsolète (xs1) : le créateur doit recréer la parley");
+	if (!s.startsWith(`${KEY_VERSION}:`)) badKey(`clé de parley invalide : préfixe ${KEY_VERSION}: attendu`);
 	const parts = s.slice(KEY_VERSION.length + 1).split(":");
-	if (parts.length < 6) badKey("clé xshell invalide : champs manquants");
+	if (parts.length < 6) badKey("clé de parley invalide : champs manquants");
 	const tail = parts.splice(parts.length - 5, 5);
 	const relay = parts.join(":");
-	const [xshellId, name, rank, seedS, otherS] = tail as [string, string, string, string, string];
-	if (!RELAY_RE.test(relay)) badKey("clé xshell invalide : relai");
-	if (!NAME_RE.test(name)) badKey("clé xshell invalide : nom");
-	if (rank !== "A" && rank !== "S") badKey("clé xshell invalide : rang");
+	const [parleyId, name, rank, seedS, otherS] = tail as [string, string, string, string, string];
+	if (!RELAY_RE.test(relay)) badKey("clé de parley invalide : relai");
+	if (!NAME_RE.test(name)) badKey("clé de parley invalide : nom");
+	if (rank !== "A" && rank !== "S") badKey("clé de parley invalide : rang");
 	let seed: Uint8Array;
 	let other: Uint8Array;
 	try {
-		b64uDecode(xshellId, 16);
+		b64uDecode(parleyId, 16);
 		seed = b64uDecode(seedS, 32);
 		other = b64uDecode(otherS, 32);
 	} catch {
-		return badKey("clé xshell invalide : encodage");
+		return badKey("clé de parley invalide : encodage");
 	}
-	if (rank === "A") return { relay, xshellId, name, rank, seed, answerSeed: other };
-	if (!ed25519.utils.isValidPublicKey(other, false)) badKey("clé xshell invalide : clé publique");
-	return { relay, xshellId, name, rank, seed, askPub: other };
+	if (rank === "A") return { relay, parleyId, name, rank, seed, answerSeed: other };
+	if (!ed25519.utils.isValidPublicKey(other, false)) badKey("clé de parley invalide : clé publique");
+	return { relay, parleyId, name, rank, seed, askPub: other };
 }
 
-export function formatShellKey(key: ShellKey): string {
+export function formatParleyKey(key: ParleyKey): string {
 	return [
 		KEY_VERSION,
 		key.relay,
-		key.xshellId,
+		key.parleyId,
 		key.name,
 		key.rank,
 		b64uEncode(key.seed),
@@ -255,11 +255,11 @@ export function formatShellKey(key: ShellKey): string {
 	].join(":");
 }
 
-/** The answer (slave) key of the xshell, derived from a master key. */
+/** The answer (slave) key of the parley, derived from a master key. */
 export function answerKey(ask: AskKey): AnswerKey {
 	return {
 		relay: ask.relay,
-		xshellId: ask.xshellId,
+		parleyId: ask.parleyId,
 		name: ask.name,
 		rank: "S",
 		seed: copy(ask.answerSeed),
@@ -267,18 +267,18 @@ export function answerKey(ask: AskKey): AnswerKey {
 	};
 }
 
-export function newXshellId(): string {
+export function newParleyId(): string {
 	return b64uEncode(randomBytes(16));
 }
 
-export function generateShell(relay: string, name: string): { ask: AskKey; answer: AnswerKey } {
+export function generateParley(relay: string, name: string): { ask: AskKey; answer: AnswerKey } {
 	if (!RELAY_RE.test(relay)) badKey("relai invalide");
 	if (!NAME_RE.test(name)) badKey("nom invalide");
-	const ask = { relay, xshellId: newXshellId(), name, rank: "A" as const, seed: generateSignPair().seed, answerSeed: generateSignPair().seed };
+	const ask = { relay, parleyId: newParleyId(), name, rank: "A" as const, seed: generateSignPair().seed, answerSeed: generateSignPair().seed };
 	return { ask, answer: answerKey(ask) };
 }
 
-export function rankPubs(key: ShellKey): { pubAsk: Uint8Array; pubAnswer: Uint8Array } {
+export function rankPubs(key: ParleyKey): { pubAsk: Uint8Array; pubAnswer: Uint8Array } {
 	requireLength(key.seed, 32, "graine Ed25519");
 	const own = ed25519.getPublicKey(key.seed);
 	if (key.rank === "A") {
@@ -289,10 +289,10 @@ export function rankPubs(key: ShellKey): { pubAsk: Uint8Array; pubAnswer: Uint8A
 	return { pubAsk: copy(key.askPub), pubAnswer: own };
 }
 
-/** K_grp = HKDF-SHA256(pub_ask ‖ pub_answer, salt = empty, info = "xshell cert v1" ‖ xshell_id, 32). */
-export function groupKey(key: ShellKey): Uint8Array {
+/** K_grp = HKDF-SHA256(pub_ask ‖ pub_answer, salt = empty, info = "xs-parley cert v1" ‖ parley_id, 32). */
+export function groupKey(key: ParleyKey): Uint8Array {
 	const { pubAsk, pubAnswer } = rankPubs(key);
-	const info = concatBytes(utf8.encode("xshell cert v1"), utf8.encode(key.xshellId));
+	const info = concatBytes(utf8.encode("xs-parley cert v1"), utf8.encode(key.parleyId));
 	return hkdf(sha256, concatBytes(pubAsk, pubAnswer), new Uint8Array(0), info, 32);
 }
 
@@ -302,7 +302,7 @@ export function groupKey(key: ShellKey): Uint8Array {
 
 export interface CertBody {
 	v: 1;
-	xshell_id: string;
+	parley_id: string;
 	rank: Rank;
 	sign_pub: string;
 	kem_pub: string;
@@ -317,20 +317,20 @@ export interface Cert {
 
 export const CERT_MAX_AGE_MS = 25 * 3600_000;
 const CERT_MAX_FUTURE_MS = 5 * 60_000;
-const CERT_BODY_KEYS = ["v", "xshell_id", "rank", "sign_pub", "kem_pub", "alias", "role", "issued_at"] as const;
+const CERT_BODY_KEYS = ["v", "parley_id", "rank", "sign_pub", "kem_pub", "alias", "role", "issued_at"] as const;
 
 export function signCert(
-	key: ShellKey,
+	key: ParleyKey,
 	fields: { signPub: Uint8Array; kemPub: Uint8Array; alias: string; role: string; issuedAt: Date },
 ): Cert {
 	requireLength(fields.signPub, 32, "clé publique de signature");
 	requireLength(fields.kemPub, 32, "clé publique X25519");
 	if (!NAME_RE.test(fields.alias)) {
-		throw new XshellCryptoError("bad_structure", "alias invalide");
+		throw new ParleyCryptoError("bad_structure", "alias invalide");
 	}
 	const body: CertBody = {
 		v: 1,
-		xshell_id: key.xshellId,
+		parley_id: key.parleyId,
 		rank: key.rank,
 		sign_pub: b64uEncode(fields.signPub),
 		kem_pub: b64uEncode(fields.kemPub),
@@ -346,18 +346,18 @@ export function certFingerprint(cert: Cert): string {
 }
 
 function fail(code: CryptoErrorCode, message: string): never {
-	throw new XshellCryptoError(code, message);
+	throw new ParleyCryptoError(code, message);
 }
 
 /** §4.2 validation, steps 1 to 6 in order; the first failure aborts. Returns a normalized copy. */
-export function verifyCert(input: unknown, key: ShellKey, xshellId: string, fpAnnounced: string, now: Date): Cert {
+export function verifyCert(input: unknown, key: ParleyKey, parleyId: string, fpAnnounced: string, now: Date): Cert {
 	// 1. Structure.
 	if (!isObject(input) || !hasExactKeys(input, ["body", "sig"])) fail("bad_structure", "certificat : structure");
 	const { body, sig } = input;
 	if (!isObject(body) || !hasExactKeys(body, CERT_BODY_KEYS)) fail("bad_structure", "certificat : corps");
 	if (body.v !== 1) fail("bad_structure", "certificat : version");
 	if (body.rank !== "A" && body.rank !== "S") fail("bad_structure", "certificat : rang");
-	for (const k of ["xshell_id", "sign_pub", "kem_pub", "alias", "role", "issued_at"] as const) {
+	for (const k of ["parley_id", "sign_pub", "kem_pub", "alias", "role", "issued_at"] as const) {
 		if (typeof body[k] !== "string") fail("bad_structure", `certificat : ${k}`);
 	}
 	if (typeof sig !== "string") fail("bad_structure", "certificat : sig");
@@ -378,15 +378,15 @@ export function verifyCert(input: unknown, key: ShellKey, xshellId: string, fpAn
 		fail("stale_cert", "certificat hors fenêtre de fraîcheur");
 	}
 
-	// 4. xshell binding (the local key belongs to exactly one xshell).
-	if (b.xshell_id !== xshellId || key.xshellId !== xshellId) fail("wrong_xshell", "certificat d'une autre xshell");
+	// 4. parley binding (the local key belongs to exactly one parley).
+	if (b.parley_id !== parleyId || key.parleyId !== parleyId) fail("wrong_parley", "certificat d'une autre parley");
 
 	// 5. Signature by the rank key derived from the local key.
 	const pubs = rankPubs(key);
 	const rankPub = b.rank === "A" ? pubs.pubAsk : pubs.pubAnswer;
 	const normalized: CertBody = {
 		v: 1,
-		xshell_id: b.xshell_id,
+		parley_id: b.parley_id,
 		rank: b.rank,
 		sign_pub: b.sign_pub,
 		kem_pub: b.kem_pub,
@@ -408,26 +408,26 @@ const NONCE_LEN = 24;
 const TAG_LEN = 16;
 
 /** Test-vector entry point: caller supplies the 24-byte nonce. */
-export function sealCertBoxWithNonce(kGrp: Uint8Array, xshellId: string, cert: Cert, nonce: Uint8Array): string {
+export function sealCertBoxWithNonce(kGrp: Uint8Array, parleyId: string, cert: Cert, nonce: Uint8Array): string {
 	requireLength(kGrp, 32, "K_grp");
 	requireLength(nonce, NONCE_LEN, "nonce");
 	const clear = utf8.encode(jcs({ body: cert.body, sig: cert.sig }));
-	const ct = xchacha20poly1305(kGrp, nonce, utf8.encode(xshellId)).encrypt(clear);
+	const ct = xchacha20poly1305(kGrp, nonce, utf8.encode(parleyId)).encrypt(clear);
 	return b64uEncode(concatBytes(nonce, ct));
 }
 
-export function sealCertBox(kGrp: Uint8Array, xshellId: string, cert: Cert): string {
-	return sealCertBoxWithNonce(kGrp, xshellId, cert, randomBytes(NONCE_LEN));
+export function sealCertBox(kGrp: Uint8Array, parleyId: string, cert: Cert): string {
+	return sealCertBoxWithNonce(kGrp, parleyId, cert, randomBytes(NONCE_LEN));
 }
 
 /** Decrypts and JSON-parses a cert_box; the result MUST then be validated with `verifyCert`. */
-export function openCertBox(kGrp: Uint8Array, xshellId: string, box: string): unknown {
+export function openCertBox(kGrp: Uint8Array, parleyId: string, box: string): unknown {
 	requireLength(kGrp, 32, "K_grp");
 	const raw = b64uDecode(box);
 	if (raw.length < NONCE_LEN + TAG_LEN) fail("bad_encoding", "cert_box trop court");
 	let clear: Uint8Array;
 	try {
-		clear = xchacha20poly1305(kGrp, raw.subarray(0, NONCE_LEN), utf8.encode(xshellId)).decrypt(
+		clear = xchacha20poly1305(kGrp, raw.subarray(0, NONCE_LEN), utf8.encode(parleyId)).decrypt(
 			raw.subarray(NONCE_LEN),
 		);
 	} catch {
@@ -445,8 +445,8 @@ export function openCertBox(kGrp: Uint8Array, xshellId: string, box: string): un
 // ---------------------------------------------------------------------------
 
 export const INVITE_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const INVITE_ID_INFO = utf8.encode("xshell invite id v1");
-const INVITE_KEY_INFO = utf8.encode("xshell invite key v1");
+const INVITE_ID_INFO = utf8.encode("xs-parley invite id v1");
+const INVITE_KEY_INFO = utf8.encode("xs-parley invite key v1");
 
 /** A fresh invitation code: UUID v4, lowercase. */
 export function newInviteCode(): string {
@@ -467,7 +467,7 @@ export function inviteSecrets(code: string): { inviteId: string; key: Uint8Array
 	};
 }
 
-const INVITE_BOX_INFO = utf8.encode("xshell invite box v2");
+const INVITE_BOX_INFO = utf8.encode("xs-parley invite box v2");
 
 /** `aad_req = UTF-8(invite_id) ‖ epk_j` (raw 32 bytes). */
 function inviteRequestAad(inviteId: string, epkJ: Uint8Array): Uint8Array {
@@ -542,7 +542,7 @@ export function openInviteRequest(
 
 /**
  * `K_box = HKDF-SHA256(ikm = K_inv ‖ X25519(e_priv, peer_pub), salt = empty,
- * info = "xshell invite box v2" ‖ UTF-8(invite_id) ‖ epk_j ‖ epk_m, 32)`. Fails `bad_key` on a low-order point.
+ * info = "xs-parley invite box v2" ‖ UTF-8(invite_id) ‖ epk_j ‖ epk_m, 32)`. Fails `bad_key` on a low-order point.
  */
 function inviteBoxKey(
 	kInv: Uint8Array,
@@ -570,7 +570,7 @@ export function sealInviteWithEphemeral(
 	kInv: Uint8Array,
 	inviteId: string,
 	epkJ: Uint8Array,
-	shellKey: string,
+	parleyKey: string,
 	ePrivM: Uint8Array,
 	nonce: Uint8Array,
 ): string {
@@ -579,7 +579,7 @@ export function sealInviteWithEphemeral(
 	requireLength(nonce, NONCE_LEN, "nonce");
 	const eM = kemPairFromPriv(ePrivM);
 	const kBox = inviteBoxKey(kInv, inviteId, eM.priv, epkJ, epkJ, eM.pub);
-	const clear = utf8.encode(jcs({ v: 1, key: shellKey }));
+	const clear = utf8.encode(jcs({ v: 1, key: parleyKey }));
 	const ct = xchacha20poly1305(kBox, nonce, utf8.encode(inviteId)).encrypt(clear);
 	kBox.fill(0);
 	eM.priv.fill(0);
@@ -588,14 +588,14 @@ export function sealInviteWithEphemeral(
 
 /**
  * The master's answer: `box = b64u(epk_m(32) ‖ nonce(24) ‖ XChaCha20-Poly1305(K_box, nonce,
- * JCS({v: 1, key: shellKey}), aad = UTF-8(invite_id)))`, with a fresh ephemeral `e_m`. `K_box` depends on the
+ * JCS({v: 1, key: parleyKey}), aad = UTF-8(invite_id)))`, with a fresh ephemeral `e_m`. `K_box` depends on the
  * X25519 secret shared with `epk_j`: knowing the UUID later does not open a recorded box.
  */
-export function sealInvite(kInv: Uint8Array, inviteId: string, epkJ: Uint8Array, shellKey: string): string {
-	return sealInviteWithEphemeral(kInv, inviteId, epkJ, shellKey, x25519.utils.randomSecretKey(), randomBytes(NONCE_LEN));
+export function sealInvite(kInv: Uint8Array, inviteId: string, epkJ: Uint8Array, parleyKey: string): string {
+	return sealInviteWithEphemeral(kInv, inviteId, epkJ, parleyKey, x25519.utils.randomSecretKey(), randomBytes(NONCE_LEN));
 }
 
-/** Decrypts an invitation box with the claimant's ephemeral private key; returns the xs2 key it carries (the caller validates it with `parseShellKey`). */
+/** Decrypts an invitation box with the claimant's ephemeral private key; returns the xs2 key it carries (the caller validates it with `parseParleyKey`). */
 export function openInvite(kInv: Uint8Array, inviteId: string, ePrivJ: Uint8Array, box: string): string {
 	requireLength(kInv, 32, "clé d'invitation");
 	const eJ = kemPairFromPriv(ePrivJ);
@@ -634,7 +634,7 @@ export type Kind = "request" | "accepted" | "response" | "question" | "answer" |
 export type Status = "ok" | "refused" | "aborted" | "error" | "busy";
 export interface Header {
 	v: 1;
-	xshell_id: string;
+	parley_id: string;
 	msg_id: string;
 	kind: Kind;
 	from: string;
@@ -658,11 +658,11 @@ export interface Envelope {
 export const PLAIN_MAX = 47104;
 const TRUNCATION_SUFFIX = "\n[tronqué]";
 const TS_SKEW_MS = 5 * 60_000;
-const HPKE_INFO = utf8.encode("xshell env v1");
+const HPKE_INFO = utf8.encode("xs-parley env v1");
 
 const KINDS: readonly string[] = ["request", "accepted", "response", "question", "answer", "destroy"];
 const STATUSES: readonly string[] = ["ok", "refused", "aborted", "error", "busy"];
-const HEADER_KEYS = ["v", "xshell_id", "msg_id", "kind", "from", "to", "reply_to", "ts"] as const;
+const HEADER_KEYS = ["v", "parley_id", "msg_id", "kind", "from", "to", "reply_to", "ts"] as const;
 const FP_RE = /^xs:[A-Za-z0-9_-]{43}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -743,7 +743,7 @@ export async function sealEnvelope(
 function parseHeader(h: Record<string, unknown>): Header {
 	if (!hasExactKeys(h, HEADER_KEYS)) fail("bad_structure", "en-tête : champs");
 	if (h.v !== 1) fail("bad_structure", "en-tête : version");
-	if (typeof h.xshell_id !== "string") fail("bad_structure", "en-tête : xshell_id");
+	if (typeof h.parley_id !== "string") fail("bad_structure", "en-tête : parley_id");
 	if (typeof h.msg_id !== "string" || !UUID_RE.test(h.msg_id)) fail("bad_structure", "en-tête : msg_id");
 	if (typeof h.kind !== "string" || !KINDS.includes(h.kind)) fail("bad_structure", "en-tête : kind");
 	if (typeof h.from !== "string" || !FP_RE.test(h.from)) fail("bad_structure", "en-tête : from");
@@ -784,12 +784,12 @@ function parsePlain(raw: Uint8Array, kind: Kind): { cert: unknown; text: string;
 /** §5.2 steps 1 to 5 (the anti-replay cache is the caller's job). `kemPrivs`: current key first, then the previous one. */
 export async function openEnvelope(
 	input: unknown,
-	opts: { frameXshellId: string; selfFp: string; key: ShellKey; kemPrivs: Uint8Array[]; now: Date },
+	opts: { frameParleyId: string; selfFp: string; key: ParleyKey; kemPrivs: Uint8Array[]; now: Date },
 ): Promise<{ h: Header; plain: Plain; cert: Cert }> {
 	// 1. Addressing, then strict structure.
 	if (!isObject(input) || !isObject(input.h)) fail("bad_structure", "enveloppe : structure");
-	if (input.h.xshell_id !== opts.frameXshellId || input.h.xshell_id !== opts.key.xshellId) {
-		fail("bad_address", "xshell_id ≠ trame ou xshell non rejointe");
+	if (input.h.parley_id !== opts.frameParleyId || input.h.parley_id !== opts.key.parleyId) {
+		fail("bad_address", "parley_id ≠ trame ou parley non rejointe");
 	}
 	if (input.h.to !== opts.selfFp) fail("bad_address", "destinataire ≠ cette session");
 	if (!hasExactKeys(input, ["h", "enc", "ct", "sig"])) fail("bad_structure", "enveloppe : champs");
@@ -819,8 +819,8 @@ export async function openEnvelope(
 	if (!clear) return fail("decrypt_failed", "déchiffrement HPKE impossible");
 	const parsed = parsePlain(clear, h.kind);
 
-	// 3. Sender certificate, validated against the header's xshell and sender fingerprint.
-	const cert = verifyCert(parsed.cert, opts.key, h.xshell_id, h.from, opts.now);
+	// 3. Sender certificate, validated against the header's parley and sender fingerprint.
+	const cert = verifyCert(parsed.cert, opts.key, h.parley_id, h.from, opts.now);
 
 	// 4. Envelope signature by the certificate's sign_pub.
 	const sigBytes = b64uDecode(sig, 64);

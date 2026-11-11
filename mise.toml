@@ -3,9 +3,9 @@ go = "1.27.3"
 bun = "1.4.4"
 
 [tasks."relay:build"]
-description = "Build the relay binary into bin/xshell-relay"
+description = "Build the relay binary into bin/xs-parley-relay"
 dir = "relay"
-run = "go build -o ../bin/xshell-relay ./cmd/xshell-relay"
+run = "go build -o ../bin/xs-parley-relay ./cmd/xs-parley-relay"
 
 [tasks."extension:build"]
 description = "Install the extension dependencies and type-check it (omp loads the TypeScript sources directly)"
@@ -25,20 +25,20 @@ depends = ["extension:build"]
 run = "omp install {{config_root}}/extension"
 
 [tasks."relay:install"]
-description = "Install the relay as a local launchd agent (127.0.0.1:8080 unless XSHELL_LISTEN is set); restarts it if already installed"
+description = "Install the relay as a local launchd agent (127.0.0.1:8080 unless XSP_LISTEN is set); restarts it if already installed"
 depends = ["relay:build"]
 run = '''
 set -eu
 
-label=omp.xshell.relay
-listen=${XSHELL_LISTEN:-127.0.0.1:8080}
-binary="$HOME/.local/bin/xshell-relay"
+label=omp.xs-parley.relay
+listen=${XSP_LISTEN:-127.0.0.1:8080}
+binary="$HOME/.local/bin/xs-parley-relay"
 plist="$HOME/Library/LaunchAgents/$label.plist"
-log="$HOME/Library/Logs/xshell-relay.log"
+log="$HOME/Library/Logs/xs-parley-relay.log"
 domain="gui/$(id -u)"
 
 mkdir -p "$(dirname "$binary")" "$(dirname "$plist")" "$(dirname "$log")"
-install -m 0755 "{{config_root}}/bin/xshell-relay" "$binary"
+install -m 0755 "{{config_root}}/bin/xs-parley-relay" "$binary"
 
 cat > "$plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -52,7 +52,7 @@ cat > "$plist" <<EOF
   </array>
   <key>EnvironmentVariables</key>
   <dict>
-    <key>XSHELL_LISTEN</key><string>$listen</string>
+    <key>XSP_LISTEN</key><string>$listen</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -68,12 +68,12 @@ launchctl bootstrap "$domain" "$plist"
 
 for _ in $(seq 1 50); do
   if curl -fsS "http://$listen/healthz" >/dev/null 2>&1; then
-    echo "xshell-relay ($label) en écoute sur $listen ; journal : $log"
-    echo "Côté omp : /xshell create <nom> --relay $listen --notls"
+    echo "xs-parley-relay ($label) en écoute sur $listen ; journal : $log"
+    echo "Côté omp : /xsp create <nom> --relay $listen --notls"
     exit 0
   fi
   sleep 0.1
 done
-echo "xshell-relay ne répond pas sur http://$listen/healthz ; voir $log" >&2
+echo "xs-parley-relay ne répond pas sur http://$listen/healthz ; voir $log" >&2
 exit 1
 '''

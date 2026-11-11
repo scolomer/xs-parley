@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { Audit } from "./audit.ts";
-import { generateKemPair, generateShell, generateSignPair, signCert } from "./crypto.ts";
+import { generateKemPair, generateParley, generateSignPair, signCert } from "./crypto.ts";
 import { KEM_GRACE_MS, KemKeeper, PeerBook } from "./keys.ts";
 import { Store } from "./store.ts";
 import { FakeClock } from "./testkit.ts";
@@ -14,25 +14,25 @@ afterEach(() => {
 });
 
 function tmpStore(): Store {
-	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "xshell-store-"));
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "xsp-store-"));
 	dirs.push(dir);
-	return new Store(path.join(dir, "nested", "xshell"));
+	return new Store(path.join(dir, "nested", "xs-parley"));
 }
 
 describe("Store", () => {
 	test("creates 0700 directories and 0600 files atomically", () => {
 		const store = tmpStore();
-		const file = path.join(store.root, "shells", `${"A".repeat(22)}.json`);
-		store.writeShell({ v: 1, xshell_id: "A".repeat(22), name: "x", relay: "r", members: {}, peers: {} });
+		const file = path.join(store.root, "parleys", `${"A".repeat(22)}.json`);
+		store.writeParley({ v: 1, parley_id: "A".repeat(22), name: "x", relay: "r", members: {}, peers: {} });
 		expect(fs.statSync(file).mode & 0o777).toBe(0o600);
 		for (const d of [store.root, path.dirname(file)]) expect(fs.statSync(d).mode & 0o777).toBe(0o700);
 		expect(fs.readdirSync(path.dirname(file)).filter(f => f.endsWith(".tmp"))).toEqual([]);
-		expect(store.readShell("A".repeat(22))?.name).toBe("x");
+		expect(store.readParley("A".repeat(22))?.name).toBe("x");
 	});
 
 	test("rejects ids that could escape the directory", () => {
 		const store = tmpStore();
-		expect(() => store.shellPath("../../etc/passwd")).toThrow();
+		expect(() => store.parleyPath("../../etc/passwd")).toThrow();
 		expect(() => store.identityPath("xs:../x")).toThrow();
 		expect(() => store.auditPath("a/b")).toThrow();
 	});
@@ -48,7 +48,7 @@ describe("Audit", () => {
 		expect(fs.statSync(store.auditPath(id)).mode & 0o777).toBe(0o600);
 		const lines = audit.tail(id, 10);
 		expect(lines).toHaveLength(2);
-		expect(lines[0]).toMatchObject({ ts: "2026-01-02T03:04:05.678Z", xshell_id: id, event: "sent", text: "hello", session_id: "s" });
+		expect(lines[0]).toMatchObject({ ts: "2026-01-02T03:04:05.678Z", parley_id: id, event: "sent", text: "hello", session_id: "s" });
 		expect(audit.tail(id, 1)[0]?.event).toBe("response_received");
 	});
 
@@ -98,7 +98,7 @@ describe("KemKeeper", () => {
 });
 
 describe("PeerBook", () => {
-	const { ask } = generateShell("relay.test", "infra");
+	const { ask } = generateParley("relay.test", "infra");
 	const sign = generateSignPair();
 	const cert = (issuedAt: number, alias = "peer") =>
 		signCert(ask, { signPub: sign.pub, kemPub: generateKemPair().pub, alias, role: "", issuedAt: new Date(issuedAt) });

@@ -1,4 +1,4 @@
-module github.com/scolomer/omp-xshell/relay
+module github.com/scolomer/xs-parley/relay
 
 go 1.27
 

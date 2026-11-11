@@ -1,22 +1,22 @@
 {
-  "description": "ikm = the 16 UUID bytes; invite_id = base64url(HKDF-SHA256(ikm, salt = empty, info = 'xshell invite id v1', L = 16)); k_inv = HKDF-SHA256(ikm, salt = empty, info = 'xshell invite key v1', L = 32). Claimant: ephemeral X25519 pair e_j; req = base64url(nonce || XChaCha20-Poly1305(k_inv, nonce, UTF-8(JCS({v: 1, alias, role})), aad = UTF-8(invite_id) || epk_j (32 raw bytes))). Master: ephemeral X25519 pair e_m; shared = X25519(e_m.priv, epk_j) (= X25519(e_j.priv, epk_m), all-zero is refused); k_box = HKDF-SHA256(ikm = k_inv || shared, salt = empty, info = 'xshell invite box v2' || UTF-8(invite_id) || epk_j || epk_m, L = 32); box = base64url(epk_m || nonce || XChaCha20-Poly1305(k_box, nonce, UTF-8(JCS({v: 1, key: shell_key})), aad = UTF-8(invite_id)))",
+  "description": "ikm = the 16 UUID bytes; invite_id = base64url(HKDF-SHA256(ikm, salt = empty, info = 'xs-parley invite id v1', L = 16)); k_inv = HKDF-SHA256(ikm, salt = empty, info = 'xs-parley invite key v1', L = 32). Claimant: ephemeral X25519 pair e_j; req = base64url(nonce || XChaCha20-Poly1305(k_inv, nonce, UTF-8(JCS({v: 1, alias, role})), aad = UTF-8(invite_id) || epk_j (32 raw bytes))). Master: ephemeral X25519 pair e_m; shared = X25519(e_m.priv, epk_j) (= X25519(e_j.priv, epk_m), all-zero is refused); k_box = HKDF-SHA256(ikm = k_inv || shared, salt = empty, info = 'xs-parley invite box v2' || UTF-8(invite_id) || epk_j || epk_m, L = 32); box = base64url(epk_m || nonce || XChaCha20-Poly1305(k_box, nonce, UTF-8(JCS({v: 1, key: parley_key})), aad = UTF-8(invite_id)))",
   "uuid": "3f2b8c4e-1a5d-4e7f-9b2a-6c8d0e1f2a3b",
-  "invite_id": "PyK_BpE1VFKCJ64SQRgvUQ",
-  "k_inv": "CJM-PeGh0Hqg42Uvj5z4G_xNKMw0NhBuUPWVvD5I2lg",
-  "claimant_ephemeral_priv": "6y2O8m3RUUwFBXCtiinmoZqtZyScKGdC8ToaRpt2NrA",
-  "claimant_ephemeral_pub": "4lLkFjZ8YXYGEbl0e3alIpi08vgFuIlUPCQH5pXJZTw",
+  "invite_id": "QH2eIesyKaLvCQboRzu1JQ",
+  "k_inv": "KBPmKmkH2mlqkPnLmbSe043W6vPTvFigZRp3yzizho4",
+  "claimant_ephemeral_priv": "GW2Gppg_PocJbQzXeDT-P6lntYV46Op7IOyUjGF6LKI",
+  "claimant_ephemeral_pub": "Sj2-pz8W3PCoxevV6jRrE5JQjXdT-KL1exoKtRS0VQ8",
   "hello": {
     "alias": "prod-box",
     "role": "accès prod k8s, kubectl lecture"
   },
   "jcs_hello": "{\"alias\":\"prod-box\",\"role\":\"accès prod k8s, kubectl lecture\",\"v\":1}",
-  "request_nonce": "ag5hWDDL2AmbXm-Mm2hbAfEAuLYpJf8J",
-  "req": "ag5hWDDL2AmbXm-Mm2hbAfEAuLYpJf8JusI6WbNTHJh4tfCHQG-D3f77bUaZkVhzdqfsTNvhDdYGoSplb1xS4pWwZLnC-SdS6v8lWKuxYHsSh5MUIQyElOl_ofszyg8NlZDxNQnW9xDov4Gj",
-  "master_ephemeral_priv": "u5tsCsXvY5OyqO46-XPaAM71QRhjEWO_-NlasfNM_EQ",
-  "master_ephemeral_pub": "-hz4srrERKNDVns4dDLLUI1loLChK2xMEdTaZj2U0lE",
-  "shared": "g2hzXp9UkU9DpzA1YfBkjx8tv4RypAuPtYuz8IvhZlQ",
-  "k_box": "XTNc5A0CP_x46CHf4K3rZxzIN0jRrTh3m9m6Pbtke48",
-  "shell_key": "xs2:relay.example.com:8443:24pD5Dl-9lczoiWSwNrthQ:prod-k8s:S:h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY:zaXtGGBGS4LBlQuEorVBexaB8ni-P4It4g8O26qD7Xw",
-  "box_nonce": "_3nXxBVtulmA1rLV5rN46Gt2UqpkwbIn",
-  "box": "-hz4srrERKNDVns4dDLLUI1loLChK2xMEdTaZj2U0lH_edfEFW26WYDWstXms3joa3ZSqmTBsifplRpDeUUAnci1NzWhymA-LeSTeYE0Aq2x_XxGeN2sNXU2oepLKryEBvHTRS7uyNmT1pZ4JVeG8JdfVD4A3DwXJbYr8-h1uLFK60pparUxggzdHn4_hwEtG1kLqKSZ76TQ9FIXCa3G6Wd3D56SucxHrXKlIkrD5j_RI7NPNTU1WjQv4wPdcmppNl9mcUYADGUol7nHSG91F-G9d5z10T8agiteTDJ0Rm9EvgFEWDyNQ1zEgOQ"
+  "request_nonce": "fP-NyEr-Sa-NSlRxTLy4XKfc4zY56w65",
+  "req": "fP-NyEr-Sa-NSlRxTLy4XKfc4zY56w65AMkebeP8Qe-cfDFPOWmH2Sc6Xy7xmafo08dRgneNw3YWsG4AtyHlVHo439j-V3crCRIc2uVknKGNVTWEAxIH7o5XUCoG0NnhxsUG9jUw2fnJrhAr",
+  "master_ephemeral_priv": "_hyNHN6cxb6oLOnfl8HPvXz0l5tk85wzUDhzL-dWrtU",
+  "master_ephemeral_pub": "rA-PSqGrbm9Eh0mTNKH3YtbZ0q6Rkn7aVuPscp4bXgg",
+  "shared": "65NjZpQ1XLZmn8g2zfk7nWRd6y1P1hReMiSomuLIbRA",
+  "k_box": "mMRJGVFyL_f5Drx6UxIvYbgRclA8wiINwVO4090guQc",
+  "parley_key": "xs2:relay.example.com:8443:CZvT9oQ5Qyyla-4NhysqNg:prod-k8s:S:giB0bK3hXUR3QkF76XDqhIz-Wp6rV_ULCDkfXBg4NjE:qWcHYx2YZoZeHn1SSHjoEyoYETZcb8QwxRPsVZbdV54",
+  "box_nonce": "cRN4xoy6Fnal9ZRDMyzGLwgUhpuHXNGg",
+  "box": "rA-PSqGrbm9Eh0mTNKH3YtbZ0q6Rkn7aVuPscp4bXghxE3jGjLoWdqX1lEMzLMYvCBSGm4dc0aC_GEBxxGCFfGWBdNZkDy7WkNwJj0nN6oXKnQVMJpYhsQeK3wwkATcLhSRPuZviQTnyw5IWXQP91tWn0HUBfnzikLJcZ3FSOjXy16te_kNjEA4HU69x-5w9PCtIUzDjSpgDtQzL5JpIzE8q-ZuGKHa0ELw7EN-fGPUC90y21yCOncSOz09bZ5Ww2HDJBwRg5_DXMO4KC8IhZ81XbO1XFBrhuKsInywPKA5wChY5OKVM7e-99Jg"
 }

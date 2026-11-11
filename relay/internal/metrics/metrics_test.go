@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/scolomer/omp-xshell/relay/internal/metrics"
+	"github.com/scolomer/xs-parley/relay/internal/metrics"
 )
 
 func TestExposition(t *testing.T) {
@@ -36,19 +36,19 @@ func TestExposition(t *testing.T) {
 		t.Fatalf("Content-Type = %q", ct)
 	}
 	for _, want := range []string{
-		"# TYPE xshell_relay_connections gauge\nxshell_relay_connections 1\n",
-		`xshell_relay_frames_total{direction="in",type="join"} 2`,
-		`xshell_relay_frames_total{direction="in",type="unknown"} 1`,
-		`xshell_relay_frames_total{direction="out",type="deliver"} 1`,
-		`xshell_relay_refusals_total{code="offline"} 1`,
-		`xshell_relay_refusals_total{code="replaced"} 0`,
-		`xshell_relay_refusals_total{code="no_invite"} 1`,
-		`xshell_relay_refusals_total{code="timeout"} 0`,
-		"# TYPE xshell_relay_offers gauge\nxshell_relay_offers 2\n",
-		`xshell_relay_invites_total{event="claim"} 1`,
-		`xshell_relay_invites_total{event="grant"} 2`,
-		`xshell_relay_invites_total{event="refuse"} 0`,
-		`xshell_relay_invites_total{event="timeout"} 0`,
+		"# TYPE xsp_relay_connections gauge\nxsp_relay_connections 1\n",
+		`xsp_relay_frames_total{direction="in",type="join"} 2`,
+		`xsp_relay_frames_total{direction="in",type="unknown"} 1`,
+		`xsp_relay_frames_total{direction="out",type="deliver"} 1`,
+		`xsp_relay_refusals_total{code="offline"} 1`,
+		`xsp_relay_refusals_total{code="replaced"} 0`,
+		`xsp_relay_refusals_total{code="no_invite"} 1`,
+		`xsp_relay_refusals_total{code="timeout"} 0`,
+		"# TYPE xsp_relay_offers gauge\nxsp_relay_offers 2\n",
+		`xsp_relay_invites_total{event="claim"} 1`,
+		`xsp_relay_invites_total{event="grant"} 2`,
+		`xsp_relay_invites_total{event="refuse"} 0`,
+		`xsp_relay_invites_total{event="timeout"} 0`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("missing %q in:\n%s", want, text)

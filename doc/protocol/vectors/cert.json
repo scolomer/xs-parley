@@ -3,46 +3,46 @@
   "now": "2026-11-01T12:00:01.000Z",
   "cases": [
     {
-      "signing_key": "xs2:relay.example.com:8443:24pD5Dl-9lczoiWSwNrthQ:prod-k8s:A:m3CgF4cCdgohx6wx4WYG25beG7oxHbrzrAEO38Nu6hE:h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY",
-      "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
-      "sign_pub": "LHZKPitmbajMr3tXIVjdIx93aWXZH4cgKShG3pZ8b5U",
-      "kem_pub": "nb4MMfkUwQwwd-PVl5aDNWqXb4ydC6qdR9_i2PseVj4",
-      "jcs_body": "{\"alias\":\"alice\",\"issued_at\":\"2026-11-01T10:00:00.000Z\",\"kem_pub\":\"nb4MMfkUwQwwd-PVl5aDNWqXb4ydC6qdR9_i2PseVj4\",\"rank\":\"A\",\"role\":\"master « accès prod » 🚀\",\"sign_pub\":\"LHZKPitmbajMr3tXIVjdIx93aWXZH4cgKShG3pZ8b5U\",\"v\":1,\"xshell_id\":\"24pD5Dl-9lczoiWSwNrthQ\"}",
+      "signing_key": "xs2:relay.example.com:8443:CZvT9oQ5Qyyla-4NhysqNg:prod-k8s:A:pbCN3M51BvaEga3aHTYeWPKOj9tntW2QmEQ3Dm9bkDA:giB0bK3hXUR3QkF76XDqhIz-Wp6rV_ULCDkfXBg4NjE",
+      "parley_id": "CZvT9oQ5Qyyla-4NhysqNg",
+      "sign_pub": "ddVBtpKnwJU4bDQZ7XYj16tJgbPn80A-vtkJyaU8AjM",
+      "kem_pub": "1TfPTA_CbyKHBk96jkLIDq0Wqqnk6FQJInfeakMxfn4",
+      "jcs_body": "{\"alias\":\"alice\",\"issued_at\":\"2026-11-01T10:00:00.000Z\",\"kem_pub\":\"1TfPTA_CbyKHBk96jkLIDq0Wqqnk6FQJInfeakMxfn4\",\"parley_id\":\"CZvT9oQ5Qyyla-4NhysqNg\",\"rank\":\"A\",\"role\":\"master « accès prod » 🚀\",\"sign_pub\":\"ddVBtpKnwJU4bDQZ7XYj16tJgbPn80A-vtkJyaU8AjM\",\"v\":1}",
       "cert": {
         "body": {
           "v": 1,
-          "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
+          "parley_id": "CZvT9oQ5Qyyla-4NhysqNg",
           "rank": "A",
-          "sign_pub": "LHZKPitmbajMr3tXIVjdIx93aWXZH4cgKShG3pZ8b5U",
-          "kem_pub": "nb4MMfkUwQwwd-PVl5aDNWqXb4ydC6qdR9_i2PseVj4",
+          "sign_pub": "ddVBtpKnwJU4bDQZ7XYj16tJgbPn80A-vtkJyaU8AjM",
+          "kem_pub": "1TfPTA_CbyKHBk96jkLIDq0Wqqnk6FQJInfeakMxfn4",
           "alias": "alice",
           "role": "master « accès prod » 🚀",
           "issued_at": "2026-11-01T10:00:00.000Z"
         },
-        "sig": "r2a2FKqvtATdN2itE8S0J5unQvMT4cac6dW8sX3nNW8hvyJPOddHpxY473FfKZ33fRgIsozqaE2-GiY9Ao70Bw"
+        "sig": "LPb7MZKokqdj6NC68OC2i9dzDpuWmH5VNWNVwaxkUa8CpVRKlop9cMX9pMN0HFuhCM7sOFxHw0r8bRHtC53XAg"
       },
-      "fp": "xs:WlPFl4bROMLwrv9_QqiIxXtrclo8lUn4TYePLrJzyYw"
+      "fp": "xs:tokhQumSTjTh1svZYiLzwNGj0TxKD1hR4OkdzC9ZG5s"
     },
     {
-      "signing_key": "xs2:relay.example.com:8443:24pD5Dl-9lczoiWSwNrthQ:prod-k8s:S:h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY:zaXtGGBGS4LBlQuEorVBexaB8ni-P4It4g8O26qD7Xw",
-      "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
-      "sign_pub": "WZHQuuUvl0gIqqTH33psl6wTMAymc0zBb4JiXWxZZsQ",
-      "kem_pub": "TJds3ZlrwTqRR6o3UMMLqUjuLfwubu0Vst4vkgwefVw",
-      "jcs_body": "{\"alias\":\"prod-box\",\"issued_at\":\"2026-11-01T10:00:00.000Z\",\"kem_pub\":\"TJds3ZlrwTqRR6o3UMMLqUjuLfwubu0Vst4vkgwefVw\",\"rank\":\"S\",\"role\":\"accès prod k8s, kubectl lecture\",\"sign_pub\":\"WZHQuuUvl0gIqqTH33psl6wTMAymc0zBb4JiXWxZZsQ\",\"v\":1,\"xshell_id\":\"24pD5Dl-9lczoiWSwNrthQ\"}",
+      "signing_key": "xs2:relay.example.com:8443:CZvT9oQ5Qyyla-4NhysqNg:prod-k8s:S:giB0bK3hXUR3QkF76XDqhIz-Wp6rV_ULCDkfXBg4NjE:qWcHYx2YZoZeHn1SSHjoEyoYETZcb8QwxRPsVZbdV54",
+      "parley_id": "CZvT9oQ5Qyyla-4NhysqNg",
+      "sign_pub": "_N2w7eaUqczKC3pgsMxWShh8ROMA5halMJWhFNfc2aA",
+      "kem_pub": "rxrfbv8P9XDDEdM07LP_d6ec8RwGnPALuKz7OU35cg0",
+      "jcs_body": "{\"alias\":\"prod-box\",\"issued_at\":\"2026-11-01T10:00:00.000Z\",\"kem_pub\":\"rxrfbv8P9XDDEdM07LP_d6ec8RwGnPALuKz7OU35cg0\",\"parley_id\":\"CZvT9oQ5Qyyla-4NhysqNg\",\"rank\":\"S\",\"role\":\"accès prod k8s, kubectl lecture\",\"sign_pub\":\"_N2w7eaUqczKC3pgsMxWShh8ROMA5halMJWhFNfc2aA\",\"v\":1}",
       "cert": {
         "body": {
           "v": 1,
-          "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
+          "parley_id": "CZvT9oQ5Qyyla-4NhysqNg",
           "rank": "S",
-          "sign_pub": "WZHQuuUvl0gIqqTH33psl6wTMAymc0zBb4JiXWxZZsQ",
-          "kem_pub": "TJds3ZlrwTqRR6o3UMMLqUjuLfwubu0Vst4vkgwefVw",
+          "sign_pub": "_N2w7eaUqczKC3pgsMxWShh8ROMA5halMJWhFNfc2aA",
+          "kem_pub": "rxrfbv8P9XDDEdM07LP_d6ec8RwGnPALuKz7OU35cg0",
           "alias": "prod-box",
           "role": "accès prod k8s, kubectl lecture",
           "issued_at": "2026-11-01T10:00:00.000Z"
         },
-        "sig": "fMf7bd1ecieHxhMNwl527rShghNvoIA6OEKJr2EeOAS6KNvo1hWdEY7yMBkJL1a2kCHws9cu7YSX72djb7cYBw"
+        "sig": "Isl8Cz936acfpaEnDgOcf2GitFzZFsLMvUlqJui6ANmtUNbpYHzRPJJcIg7RqZsY4GqqPgBKqZPtoTqGxX-aAw"
       },
-      "fp": "xs:dOGYIaBypi9R0mzsPDSsD3AWV3qlUr6lai2gsKz5pjg"
+      "fp": "xs:kSv0_p4Ie0-XQqK0ccIBmNn_-HhIuHKl9Qn8Ix3Q0nI"
     }
   ]
 }

@@ -115,26 +115,26 @@ func (m *Metrics) Handler() http.Handler {
 }
 
 func (m *Metrics) write(w io.Writer) {
-	fmt.Fprint(w, "# HELP xshell_relay_connections Connexions WebSocket actives.\n")
-	fmt.Fprint(w, "# TYPE xshell_relay_connections gauge\n")
-	fmt.Fprintf(w, "xshell_relay_connections %d\n", m.connections.Load())
+	fmt.Fprint(w, "# HELP xsp_relay_connections Connexions WebSocket actives.\n")
+	fmt.Fprint(w, "# TYPE xsp_relay_connections gauge\n")
+	fmt.Fprintf(w, "xsp_relay_connections %d\n", m.connections.Load())
 
-	fmt.Fprint(w, "# HELP xshell_relay_offers Invitations actuellement proposées.\n")
-	fmt.Fprint(w, "# TYPE xshell_relay_offers gauge\n")
-	fmt.Fprintf(w, "xshell_relay_offers %d\n", m.offers.Load())
+	fmt.Fprint(w, "# HELP xsp_relay_offers Invitations actuellement proposées.\n")
+	fmt.Fprint(w, "# TYPE xsp_relay_offers gauge\n")
+	fmt.Fprintf(w, "xsp_relay_offers %d\n", m.offers.Load())
 
-	fmt.Fprint(w, "# HELP xshell_relay_frames_total Trames échangées, par sens et par type (rate() donne des trames/s).\n")
-	fmt.Fprint(w, "# TYPE xshell_relay_frames_total counter\n")
-	writeCounters(w, "xshell_relay_frames_total", `direction="in",type=%q`, framesIn, m.in)
-	writeCounters(w, "xshell_relay_frames_total", `direction="out",type=%q`, framesOut, m.out)
+	fmt.Fprint(w, "# HELP xsp_relay_frames_total Trames échangées, par sens et par type (rate() donne des trames/s).\n")
+	fmt.Fprint(w, "# TYPE xsp_relay_frames_total counter\n")
+	writeCounters(w, "xsp_relay_frames_total", `direction="in",type=%q`, framesIn, m.in)
+	writeCounters(w, "xsp_relay_frames_total", `direction="out",type=%q`, framesOut, m.out)
 
-	fmt.Fprint(w, "# HELP xshell_relay_refusals_total Refus, par code d'erreur.\n")
-	fmt.Fprint(w, "# TYPE xshell_relay_refusals_total counter\n")
-	writeCounters(w, "xshell_relay_refusals_total", `code=%q`, codes, m.refusals)
+	fmt.Fprint(w, "# HELP xsp_relay_refusals_total Refus, par code d'erreur.\n")
+	fmt.Fprint(w, "# TYPE xsp_relay_refusals_total counter\n")
+	writeCounters(w, "xsp_relay_refusals_total", `code=%q`, codes, m.refusals)
 
-	fmt.Fprint(w, "# HELP xshell_relay_invites_total Événements d'invitation : claim reçu, grant, refus du détenteur, délai dépassé.\n")
-	fmt.Fprint(w, "# TYPE xshell_relay_invites_total counter\n")
-	writeCounters(w, "xshell_relay_invites_total", `event=%q`, invites, m.invites)
+	fmt.Fprint(w, "# HELP xsp_relay_invites_total Événements d'invitation : claim reçu, grant, refus du détenteur, délai dépassé.\n")
+	fmt.Fprint(w, "# TYPE xsp_relay_invites_total counter\n")
+	writeCounters(w, "xsp_relay_invites_total", `event=%q`, invites, m.invites)
 }
 
 func writeCounters(w io.Writer, name, labels string, keys []string, values map[string]*atomic.Uint64) {

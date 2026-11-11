@@ -1,9 +1,9 @@
 {
-  "description": "K_grp = HKDF-SHA256(ikm = pub_ask || pub_answer, salt = empty, info = 'xshell cert v1' || xshell_id (UTF-8), L = 32)",
-  "xshell_id": "24pD5Dl-9lczoiWSwNrthQ",
-  "pub_ask": "zaXtGGBGS4LBlQuEorVBexaB8ni-P4It4g8O26qD7Xw",
-  "pub_answer": "1lPHSqekTcQMCiFsDuSJQt7Kc4qrwv0GdiBUkC_1idw",
-  "key_ask": "xs2:relay.example.com:8443:24pD5Dl-9lczoiWSwNrthQ:prod-k8s:A:m3CgF4cCdgohx6wx4WYG25beG7oxHbrzrAEO38Nu6hE:h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY",
-  "key_answer": "xs2:relay.example.com:8443:24pD5Dl-9lczoiWSwNrthQ:prod-k8s:S:h1ilTWZONVXkFiJ5qsmJWJiteWKGzXE0pRM8reDuqaY:zaXtGGBGS4LBlQuEorVBexaB8ni-P4It4g8O26qD7Xw",
-  "k_grp": "XBWo7qk-3mcUGOt5a-7DYT5bJc6dekeOORnGadyH2hg"
+  "description": "K_grp = HKDF-SHA256(ikm = pub_ask || pub_answer, salt = empty, info = 'xs-parley cert v1' || parley_id (UTF-8), L = 32)",
+  "parley_id": "CZvT9oQ5Qyyla-4NhysqNg",
+  "pub_ask": "qWcHYx2YZoZeHn1SSHjoEyoYETZcb8QwxRPsVZbdV54",
+  "pub_answer": "Ej_6y7FJY1kXCPwzFJK-V-mVJbjuy0oTvdzjLUPsoHY",
+  "key_ask": "xs2:relay.example.com:8443:CZvT9oQ5Qyyla-4NhysqNg:prod-k8s:A:pbCN3M51BvaEga3aHTYeWPKOj9tntW2QmEQ3Dm9bkDA:giB0bK3hXUR3QkF76XDqhIz-Wp6rV_ULCDkfXBg4NjE",
+  "key_answer": "xs2:relay.example.com:8443:CZvT9oQ5Qyyla-4NhysqNg:prod-k8s:S:giB0bK3hXUR3QkF76XDqhIz-Wp6rV_ULCDkfXBg4NjE:qWcHYx2YZoZeHn1SSHjoEyoYETZcb8QwxRPsVZbdV54",
+  "k_grp": "KCND2_Xiy8xHrTlnhJKxdiPKjER6HtBtP0XjjF97Jks"
 }

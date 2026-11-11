@@ -1,5 +1,5 @@
 /**
- * `/xshell create|join|invite|leave|list|keys|rotate|policy|pending|log` (§7.1).
+ * `/xsp create|join|invite|leave|list|keys|rotate|policy|pending|log` (§7.1).
  *
  * `parseCommand` and `completeArguments` are pure; `executeCommand` returns the text to show the user (French, as
  * the spec's messages).
@@ -9,31 +9,31 @@ import type { Audit } from "./audit.ts";
 import { formatAuditLine } from "./audit.ts";
 import { INVITE_RE, NAME_RE, type Rank } from "./crypto.ts";
 import type { Membership } from "./keys.ts";
-import { rankLabel, type XshellSession, UserError } from "./session.ts";
+import { rankLabel, type ParleySession, UserError } from "./session.ts";
 import type { Policy } from "./store.ts";
 
 export type Command =
-	| { name: "create"; shell: string; alias?: string; policy: Policy; relay?: string; notls?: true; role: string }
-	| { name: "join"; key: string; relay?: string; shellName?: string; alias?: string; policy: Policy; notls?: true; role: string }
-	| { name: "invite"; shell: string }
-	| { name: "leave"; shell: string }
-	| { name: "list"; shell?: string }
-	| { name: "keys"; shell?: string }
-	| { name: "rotate"; shell: string }
-	| { name: "destroy"; shell: string }
-	| { name: "policy"; shell: string; policy: Policy }
+	| { name: "create"; parley: string; alias?: string; policy: Policy; relay?: string; notls?: true; role: string }
+	| { name: "join"; key: string; relay?: string; parleyName?: string; alias?: string; policy: Policy; notls?: true; role: string }
+	| { name: "invite"; parley: string }
+	| { name: "leave"; parley: string }
+	| { name: "list"; parley?: string }
+	| { name: "keys"; parley?: string }
+	| { name: "rotate"; parley: string }
+	| { name: "destroy"; parley: string }
+	| { name: "policy"; parley: string; policy: Policy }
 	| { name: "pending" }
-	| { name: "log"; shell?: string; count: number };
+	| { name: "log"; parley?: string; count: number };
 
 export type ParseResult = { ok: true; command: Command } | { ok: false; error: string };
 
 /** Subcommands in the order the usage and the completion list them. */
 const SUBCOMMANDS = [
-	{ name: "create", usage: "<nom> [--as alias] [--relay hôte[:port]] [--notls] [--approve=ask|auto] [role…]", description: "créer une xshell (tu en es master)" },
-	{ name: "join", usage: "<clé|uuid|nom> [--relay hôte[:port]] [--name nom] [--as alias] [--notls] [--approve=ask|auto] [role…]", description: "rejoindre avec une clé ask/answer, un UUID d'invitation ou le nom d'une xshell de cette machine" },
+	{ name: "create", usage: "<nom> [--as alias] [--relay hôte[:port]] [--notls] [--approve=ask|auto] [role…]", description: "créer une parley (tu en es master)" },
+	{ name: "join", usage: "<clé|uuid|nom> [--relay hôte[:port]] [--name nom] [--as alias] [--notls] [--approve=ask|auto] [role…]", description: "rejoindre avec une clé ask/answer, un UUID d'invitation ou le nom d'une parley de cette machine" },
 	{ name: "invite", usage: "<nom>", description: "invitations à usage unique (master et slave, 5 min)" },
-	{ name: "leave", usage: "<nom>", description: "quitter une xshell" },
-	{ name: "destroy", usage: "<nom>", description: "détruire une xshell pour tous ses membres en ligne (master)" },
+	{ name: "leave", usage: "<nom>", description: "quitter une parley" },
+	{ name: "destroy", usage: "<nom>", description: "détruire une parley pour tous ses membres en ligne (master)" },
 	{ name: "list", usage: "[nom]", description: "membres connus et leur présence" },
 	{ name: "keys", usage: "[nom]", description: "réafficher les clés que tu détiens" },
 	{ name: "rotate", usage: "<nom>", description: "régénérer les clés (créateur)" },
@@ -42,7 +42,7 @@ const SUBCOMMANDS = [
 	{ name: "log", usage: "[nom] [-n 20]", description: "derniers événements de l'audit local" },
 ] as const;
 
-export const USAGE = SUBCOMMANDS.map(s => `/xshell ${s.name}${s.usage ? ` ${s.usage}` : ""}`).join("\n");
+export const USAGE = SUBCOMMANDS.map(s => `/xsp ${s.name}${s.usage ? ` ${s.usage}` : ""}`).join("\n");
 
 const OPTIONS = ["--as", "--name", "--relay", "--approve", "--notls"] as const;
 type OptionName = (typeof OPTIONS)[number];
@@ -112,7 +112,7 @@ export function parseCommand(args: string): ParseResult {
 			const split = splitOptions(rest, sub);
 			if (typeof split === "string") return fail(split);
 			const [first, ...roleWords] = split.positional;
-			if (!first) return fail(sub === "create" ? "usage : /xshell create <nom> …" : "usage : /xshell join <clé|uuid|nom> …");
+			if (!first) return fail(sub === "create" ? "usage : /xsp create <nom> …" : "usage : /xsp join <clé|uuid|nom> …");
 			let policy: Policy = "auto";
 			if (split.options["--approve"] !== undefined) {
 				const parsed = parsePolicy(split.options["--approve"]);
@@ -126,14 +126,14 @@ export function parseCommand(args: string): ParseResult {
 				const relay = split.options["--relay"];
 				return {
 					ok: true,
-					command: { name: "create", shell: first, policy, role, ...notls, ...(alias ? { alias } : {}), ...(relay ? { relay } : {}) },
+					command: { name: "create", parley: first, policy, role, ...notls, ...(alias ? { alias } : {}), ...(relay ? { relay } : {}) },
 				};
 			}
-			const shellName = split.options["--name"];
+			const parleyName = split.options["--name"];
 			const relay = split.options["--relay"];
 			if (relay && !INVITE_RE.test(first)) return fail(RELAY_NEEDS_INVITE);
-			// A local xshell name never contains ':', a key always does.
-			if (shellName && NAME_RE.test(first)) return fail("--name ne s'utilise pas pour rejoindre une xshell de cette machine par son nom");
+			// A local parley name never contains ':', a key always does.
+			if (parleyName && NAME_RE.test(first)) return fail("--name ne s'utilise pas pour rejoindre une parley de cette machine par son nom");
 			return {
 				ok: true,
 				command: {
@@ -143,7 +143,7 @@ export function parseCommand(args: string): ParseResult {
 					role,
 					...notls,
 					...(alias ? { alias } : {}),
-					...(shellName ? { shellName } : {}),
+					...(parleyName ? { parleyName } : {}),
 					...(relay ? { relay } : {}),
 				},
 			};
@@ -152,27 +152,27 @@ export function parseCommand(args: string): ParseResult {
 		case "invite":
 		case "rotate":
 		case "destroy": {
-			const [shell, ...extra] = rest;
-			if (!shell || extra.length > 0) return fail(`usage : /xshell ${sub} <nom>`);
-			return { ok: true, command: { name: sub, shell } };
+			const [parley, ...extra] = rest;
+			if (!parley || extra.length > 0) return fail(`usage : /xsp ${sub} <nom>`);
+			return { ok: true, command: { name: sub, parley } };
 		}
 		case "list":
 		case "keys": {
-			const [shell, ...extra] = rest;
-			if (extra.length > 0) return fail(`usage : /xshell ${sub} [nom]`);
-			return { ok: true, command: shell ? { name: sub, shell } : { name: sub } };
+			const [parley, ...extra] = rest;
+			if (extra.length > 0) return fail(`usage : /xsp ${sub} [nom]`);
+			return { ok: true, command: parley ? { name: sub, parley } : { name: sub } };
 		}
 		case "policy": {
-			const [shell, value, ...extra] = rest;
+			const [parley, value, ...extra] = rest;
 			const policy = value === undefined ? undefined : parsePolicy(value);
-			if (!shell || !policy || extra.length > 0) return fail("usage : /xshell policy <nom> ask|auto");
-			return { ok: true, command: { name: "policy", shell, policy } };
+			if (!parley || !policy || extra.length > 0) return fail("usage : /xsp policy <nom> ask|auto");
+			return { ok: true, command: { name: "policy", parley, policy } };
 		}
 		case "pending":
-			return rest.length > 0 ? fail("usage : /xshell pending") : { ok: true, command: { name: "pending" } };
+			return rest.length > 0 ? fail("usage : /xsp pending") : { ok: true, command: { name: "pending" } };
 		case "log": {
 			let count = 20;
-			let shell: string | undefined;
+			let parley: string | undefined;
 			for (let i = 0; i < rest.length; i++) {
 				const token = rest[i] as string;
 				if (token === "-n" || token.startsWith("-n=") || /^-n\d+$/.test(token)) {
@@ -180,13 +180,13 @@ export function parseCommand(args: string): ParseResult {
 					const parsed = raw !== undefined && /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
 					if (!Number.isInteger(parsed) || parsed < 1 || parsed > 1000) return fail("-n : entier entre 1 et 1000");
 					count = parsed;
-				} else if (!shell) {
-					shell = token;
+				} else if (!parley) {
+					parley = token;
 				} else {
-					return fail("usage : /xshell log [nom] [-n 20]");
+					return fail("usage : /xsp log [nom] [-n 20]");
 				}
 			}
-			return { ok: true, command: shell ? { name: "log", shell, count } : { name: "log", count } };
+			return { ok: true, command: parley ? { name: "log", parley, count } : { name: "log", count } };
 		}
 		default:
 			return fail(`sous-commande inconnue : ${sub}\n${USAGE}`);
@@ -197,25 +197,25 @@ export function parseCommand(args: string): ParseResult {
 
 const OPTION_DESCRIPTIONS: Record<OptionName, string> = {
 	"--as": "alias de ce membre",
-	"--name": "nom local de la xshell",
+	"--name": "nom local de la parley",
 	"--relay": "hôte[:port] du relai",
 	"--approve": "politique de réception",
 	"--notls": "connexion ws:// sans TLS",
 };
 
-/** Subcommands whose first argument is the name of a joined xshell. */
+/** Subcommands whose first argument is the name of a joined parley. */
 const NAMED: Readonly<Record<string, true>> = { invite: true, leave: true, destroy: true, rotate: true, list: true, keys: true, policy: true, log: true };
-/** Subcommands reserved to masters: completion offers only the xshells where this session is master. */
+/** Subcommands reserved to masters: completion offers only the parleys where this session is master. */
 const MASTER_ONLY: Readonly<Record<string, true>> = { invite: true, destroy: true, rotate: true };
 
 /**
- * Argument completion for `/xshell` (omp `getArgumentCompletions`). Each item's `value` is the whole argument
- * text with the current word completed. `shells`: xshells this session has joined (master ones for `rotate`);
- * `localNames`: xshells of this machine the session has not joined (for `join <nom>`).
+ * Argument completion for `/xsp` (omp `getArgumentCompletions`). Each item's `value` is the whole argument
+ * text with the current word completed. `parleys`: parleys this session has joined (master ones for `rotate`);
+ * `localNames`: parleys of this machine the session has not joined (for `join <nom>`).
  */
 export function completeArguments(
 	prefix: string,
-	shells: readonly { name: string; key: { rank: Rank } }[],
+	parleys: readonly { name: string; key: { rank: Rank } }[],
 	localNames: readonly string[] = [],
 ): AutocompleteItem[] | null {
 	const tokens = prefix.split(" ");
@@ -255,11 +255,11 @@ export function completeArguments(
 		);
 	}
 	if (NAMED[sub] && position === 1 && !current.startsWith("-")) {
-		const names = shells.filter(s => !MASTER_ONLY[sub] || s.key.rank === "A").map(s => ({ word: s.name }));
+		const names = parleys.filter(s => !MASTER_ONLY[sub] || s.key.rank === "A").map(s => ({ word: s.name }));
 		return complete(names);
 	}
 	if (sub === "join" && position === 1 && !current.startsWith("-")) {
-		return complete(localNames.map(word => ({ word, description: "xshell de cette machine" })));
+		return complete(localNames.map(word => ({ word, description: "parley de cette machine" })));
 	}
 	if (sub === "policy" && position === 2) {
 		return complete([
@@ -273,7 +273,7 @@ export function completeArguments(
 // --- execution ---------------------------------------------------------------------------------------------
 
 export interface CommandDeps {
-	session: XshellSession;
+	session: ParleySession;
 	audit: Audit;
 	env: Record<string, string | undefined>;
 	now(): number;
@@ -284,11 +284,11 @@ export interface CommandOutput {
 	level: "info" | "warning" | "error";
 }
 
-function selected(session: XshellSession, name: string | undefined): Membership[] {
+function selected(session: ParleySession, name: string | undefined): Membership[] {
 	return name === undefined ? session.all() : [session.requireMember(name)];
 }
 
-function keyLines(session: XshellSession, m: Membership): string {
+function keyLines(session: ParleySession, m: Membership): string {
 	return session
 		.keysOf(m)
 		.map(k => `  ${k.label} : ${k.key}`)
@@ -302,13 +302,13 @@ function age(ms: number): string {
 	return `il y a ${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
 
-async function listText(session: XshellSession, name: string | undefined, now: number): Promise<string> {
-	const shells = selected(session, name);
-	if (shells.length === 0) return "Aucune xshell rejointe.";
+async function listText(session: ParleySession, name: string | undefined, now: number): Promise<string> {
+	const parleys = selected(session, name);
+	if (parleys.length === 0) return "Aucune parley rejointe.";
 	await session.refreshAll();
 	const blocks: string[] = [];
-	for (const m of shells) {
-		const header = `« ${m.name} » (${m.xshellId}) relai ${m.endpoint} — toi : ${m.alias} [${rankLabel(m.key.rank)}] ${m.fp} politique ${m.policy}${m.suspended ? " — SUSPENDU" : ""}`;
+	for (const m of parleys) {
+		const header = `« ${m.name} » (${m.parleyId}) relai ${m.endpoint} — toi : ${m.alias} [${rankLabel(m.key.rank)}] ${m.fp} politique ${m.policy}${m.suspended ? " — SUSPENDU" : ""}`;
 		const peers = m.peers.views(m.fp, now).sort((a, b) => Number(b.online) - Number(a.online) || a.alias.localeCompare(b.alias));
 		const rows = peers.map(p => `  ${p.alias} [${rankLabel(p.rank)}] ${p.online ? "en ligne" : "hors ligne"} ${p.fp}${p.role ? ` « ${p.role} »` : ""}`);
 		blocks.push([header, ...(rows.length > 0 ? rows : ["  (aucun autre membre connu)"])].join("\n"));
@@ -321,10 +321,10 @@ export async function executeCommand(command: Command, deps: CommandDeps): Promi
 	const { session } = deps;
 	switch (command.name) {
 		case "create": {
-			const relay = command.relay ?? deps.env.XSHELL_RELAY;
-			if (!relay) throw new UserError("relai inconnu : --relay ou XSHELL_RELAY");
-			const out = await session.createShell({
-				name: command.shell,
+			const relay = command.relay ?? deps.env.XSP_RELAY;
+			if (!relay) throw new UserError("relai inconnu : --relay ou XSP_RELAY");
+			const out = await session.createParley({
+				name: command.parley,
 				relay,
 				notls: command.notls,
 				role: command.role,
@@ -335,30 +335,30 @@ export async function executeCommand(command: Command, deps: CommandDeps): Promi
 			return {
 				level: "info",
 				text: [
-					`✓ xshell « ${m.name} » créée`,
+					`✓ parley « ${m.name} » créée`,
 					`  relai     ${m.endpoint}${command.notls ? " (sans TLS)" : ""}`,
 					`  toi       ${m.alias} [master] ${m.fp}`,
 					`  politique ${m.policy}`,
-					`  id        ${m.xshellId}`,
+					`  id        ${m.parleyId}`,
 					"",
 					"Pour faire entrer d'autres sessions :",
-					`  • sur cette machine : /xshell join ${m.name}`,
-					`  • ailleurs          : /xshell invite ${m.name} (UUID à usage unique), ou /xshell keys ${m.name}`,
+					`  • sur cette machine : /xsp join ${m.name}`,
+					`  • ailleurs          : /xsp invite ${m.name} (UUID à usage unique), ou /xsp keys ${m.name}`,
 				].join("\n"),
 			};
 		}
 		case "join": {
 			let out: { membership: Membership };
 			if (INVITE_RE.test(command.key)) {
-				const relay = command.relay ?? deps.env.XSHELL_RELAY;
-				if (!relay) throw new UserError("relai inconnu : --relay ou XSHELL_RELAY");
+				const relay = command.relay ?? deps.env.XSP_RELAY;
+				if (!relay) throw new UserError("relai inconnu : --relay ou XSP_RELAY");
 				out = await session.joinWithInvite({
 					code: command.key,
 					relay,
 					role: command.role,
 					policy: command.policy,
 					notls: command.notls,
-					...(command.shellName ? { name: command.shellName } : {}),
+					...(command.parleyName ? { name: command.parleyName } : {}),
 					...(command.alias ? { alias: command.alias } : {}),
 				});
 			} else if (NAME_RE.test(command.key)) {
@@ -372,25 +372,25 @@ export async function executeCommand(command: Command, deps: CommandDeps): Promi
 				});
 			} else {
 				if (command.relay) throw new UserError(RELAY_NEEDS_INVITE);
-				out = await session.joinShell({
+				out = await session.joinParley({
 					key: command.key,
 					role: command.role,
 					policy: command.policy,
 					notls: command.notls,
-					...(command.shellName ? { name: command.shellName } : {}),
+					...(command.parleyName ? { name: command.parleyName } : {}),
 					...(command.alias ? { alias: command.alias } : {}),
 				});
 			}
 			const m = out.membership;
 			return {
 				level: "info",
-				text: `xshell « ${m.name} » rejointe en ${rankLabel(m.key.rank)} sous l'alias ${m.alias} (${m.fp}) ; politique ${m.policy}. Connecté au relai.`,
+				text: `parley « ${m.name} » rejointe en ${rankLabel(m.key.rank)} sous l'alias ${m.alias} (${m.fp}) ; politique ${m.policy}. Connecté au relai.`,
 			};
 		}
 		case "invite": {
-			const out = await session.createInvites(command.shell);
+			const out = await session.createInvites(command.parley);
 			const m = out.membership;
-			const join = (uuid: string) => `/xshell join ${uuid} --relay ${m.relay}${m.endpoint.startsWith("ws:") ? " --notls" : ""}`;
+			const join = (uuid: string) => `/xsp join ${uuid} --relay ${m.relay}${m.endpoint.startsWith("ws:") ? " --notls" : ""}`;
 			// Shown by the caller through `notify` only, like `keys`: the UUIDs must not reach the model or the session log.
 			return {
 				level: "info",
@@ -403,50 +403,50 @@ export async function executeCommand(command: Command, deps: CommandDeps): Promi
 			};
 		}
 		case "leave":
-			await session.leaveShell(command.shell);
-			return { level: "info", text: `xshell « ${command.shell} » quittée ; fichier local supprimé.` };
+			await session.leaveParley(command.parley);
+			return { level: "info", text: `parley « ${command.parley} » quittée ; fichier local supprimé.` };
 		case "list":
-			return { level: "info", text: await listText(session, command.shell, deps.now()) };
+			return { level: "info", text: await listText(session, command.parley, deps.now()) };
 		case "keys": {
-			const shells = selected(session, command.shell);
-			if (shells.length === 0) return { level: "info", text: "Aucune xshell rejointe." };
-			return { level: "info", text: shells.map(m => `« ${m.name} » :\n${keyLines(session, m)}`).join("\n\n") };
+			const parleys = selected(session, command.parley);
+			if (parleys.length === 0) return { level: "info", text: "Aucune parley rejointe." };
+			return { level: "info", text: parleys.map(m => `« ${m.name} » :\n${keyLines(session, m)}`).join("\n\n") };
 		}
 		case "destroy": {
-			const out = await session.destroyShell(command.shell);
-			const lines = [`xshell « ${command.shell} » détruite et supprimée de cette machine.`];
+			const out = await session.destroyParley(command.parley);
+			const lines = [`parley « ${command.parley} » détruite et supprimée de cette machine.`];
 			lines.push(`  ${out.notified} membre(s) en ligne prévenu(s)${out.failed > 0 ? `, ${out.failed} injoignable(s) au moment de l'envoi` : ""}.`);
 			if (out.offline > 0) lines.push(`  ${out.offline} membre(s) hors ligne garde(nt) leur copie : la clé reste valable entre eux.`);
 			return { level: out.failed + out.offline > 0 ? "warning" : "info", text: lines.join("\n") };
 		}
 		case "rotate": {
-			const out = await session.rotateShell(command.shell);
+			const out = await session.rotateParley(command.parley);
 			return {
 				level: "warning",
 				text: [
-					`xshell « ${command.shell} » : graines régénérées ; tous les certificats sont invalidés. Chaque membre doit refaire /xshell join avec la nouvelle clé.`,
+					`parley « ${command.parley} » : graines régénérées ; tous les certificats sont invalidés. Chaque membre doit refaire /xsp join avec la nouvelle clé.`,
 					`  clé ask (master)   : ${out.keys.ask}`,
 					`  clé answer (slave) : ${out.keys.answer}`,
-					...(out.dropped > 0 ? [`${out.dropped} autre(s) adhésion(s) locale(s) à cette xshell supprimée(s) : leur clé n'est plus valable.`] : []),
+					...(out.dropped > 0 ? [`${out.dropped} autre(s) adhésion(s) locale(s) à cette parley supprimée(s) : leur clé n'est plus valable.`] : []),
 				].join("\n"),
 			};
 		}
 		case "policy":
-			session.setPolicy(command.shell, command.policy);
-			return { level: "info", text: `xshell « ${command.shell} » : politique de réception = ${command.policy}.` };
+			session.setPolicy(command.parley, command.policy);
+			return { level: "info", text: `parley « ${command.parley} » : politique de réception = ${command.policy}.` };
 		case "pending": {
 			const views = session.inbox.pendingViews();
 			if (views.length === 0) return { level: "info", text: "Aucune demande en attente de réponse." };
 			const now = deps.now();
 			const rows = views.map(v => {
 				const text = v.text.replace(/\s+/g, " ");
-				return `- ${v.request_id} → ${v.alias}@${v.xshell_name}, ${age(now - v.sent_at)}, ${v.accepted ? "acceptée" : "non acceptée"}${v.questions > 0 ? `, ${v.questions} question(s)` : ""} « ${text.length > 120 ? `${text.slice(0, 120)}…` : text} »`;
+				return `- ${v.request_id} → ${v.alias}@${v.parley_name}, ${age(now - v.sent_at)}, ${v.accepted ? "acceptée" : "non acceptée"}${v.questions > 0 ? `, ${v.questions} question(s)` : ""} « ${text.length > 120 ? `${text.slice(0, 120)}…` : text} »`;
 			});
 			return { level: "info", text: `${views.length} demande(s) en attente :\n${rows.join("\n")}` };
 		}
 		case "log": {
-			const shells = selected(session, command.shell);
-			const lines = shells.flatMap(m => deps.audit.tail(m.xshellId, command.count).map(l => ({ line: l, name: m.name })));
+			const parleys = selected(session, command.parley);
+			const lines = parleys.flatMap(m => deps.audit.tail(m.parleyId, command.count).map(l => ({ line: l, name: m.name })));
 			lines.sort((a, b) => a.line.ts.localeCompare(b.line.ts));
 			const last = lines.slice(-command.count);
 			if (last.length === 0) return { level: "info", text: "Audit vide." };

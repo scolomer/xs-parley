@@ -15,17 +15,17 @@ function error(line: string): string {
 
 describe("parseCommand", () => {
 	test("create: name, options anywhere, remaining words form the role", () => {
-		expect(parsed("create infra")).toEqual({ name: "create", shell: "infra", policy: "auto", role: "" });
+		expect(parsed("create infra")).toEqual({ name: "create", parley: "infra", policy: "auto", role: "" });
 		expect(parsed("create infra --as prod-box --approve=auto accès prod k8s, kubectl lecture")).toEqual({
 			name: "create",
-			shell: "infra",
+			parley: "infra",
 			alias: "prod-box",
 			policy: "auto",
 			role: "accès prod k8s, kubectl lecture",
 		});
 		expect(parsed("create infra accès --relay relay.example.com:8443 prod --as=x")).toEqual({
 			name: "create",
-			shell: "infra",
+			parley: "infra",
 			alias: "x",
 			relay: "relay.example.com:8443",
 			policy: "auto",
@@ -38,7 +38,7 @@ describe("parseCommand", () => {
 		expect(parsed(`join ${key} --name local --as me --approve ask do things`)).toEqual({
 			name: "join",
 			key,
-			shellName: "local",
+			parleyName: "local",
 			alias: "me",
 			policy: "ask",
 			role: "do things",
@@ -47,14 +47,14 @@ describe("parseCommand", () => {
 		expect(parsed(`join ${key} --approve=ask`)).toEqual({ name: "join", key, policy: "ask", role: "" });
 	});
 
-	test("join with an invitation UUID accepts --relay (and --notls); the UUID is not a shell key", () => {
+	test("join with an invitation UUID accepts --relay (and --notls); the UUID is not a parley key", () => {
 		const uuid = "3f2b8c4e-1a5d-4e7f-9b2a-6c8d0e1f2a3b";
 		expect(parsed(`join ${uuid} --relay relay.example.com:8443 --notls --name local --as me lecture seule`)).toEqual({
 			name: "join",
 			key: uuid,
 			relay: "relay.example.com:8443",
 			notls: true,
-			shellName: "local",
+			parleyName: "local",
 			alias: "me",
 			policy: "auto",
 			role: "lecture seule",
@@ -71,17 +71,17 @@ describe("parseCommand", () => {
 		expect(error("join --relay r.example")).toContain("usage");
 	});
 
-	test("invite takes exactly one xshell name", () => {
-		expect(parsed("invite infra")).toEqual({ name: "invite", shell: "infra" });
-		expect(error("invite")).toBe("usage : /xshell invite <nom>");
-		expect(error("invite a b")).toBe("usage : /xshell invite <nom>");
+	test("invite takes exactly one parley name", () => {
+		expect(parsed("invite infra")).toEqual({ name: "invite", parley: "infra" });
+		expect(error("invite")).toBe("usage : /xsp invite <nom>");
+		expect(error("invite a b")).toBe("usage : /xsp invite <nom>");
 		expect(error("invite infra --relay x")).toContain("usage"); // options are not parsed: an extra word
 	});
 
 	test("--notls takes no value: the next word stays in the role", () => {
 		expect(parsed("create infra --notls --relay r.example accès prod")).toEqual({
 			name: "create",
-			shell: "infra",
+			parley: "infra",
 			relay: "r.example",
 			notls: true,
 			policy: "auto",
@@ -107,12 +107,12 @@ describe("parseCommand", () => {
 	});
 
 	test("leave, rotate, list, keys, policy, pending", () => {
-		expect(parsed("leave infra")).toEqual({ name: "leave", shell: "infra" });
-		expect(parsed("rotate infra")).toEqual({ name: "rotate", shell: "infra" });
+		expect(parsed("leave infra")).toEqual({ name: "leave", parley: "infra" });
+		expect(parsed("rotate infra")).toEqual({ name: "rotate", parley: "infra" });
 		expect(parsed("list")).toEqual({ name: "list" });
-		expect(parsed("list infra")).toEqual({ name: "list", shell: "infra" });
-		expect(parsed("keys infra")).toEqual({ name: "keys", shell: "infra" });
-		expect(parsed("policy infra auto")).toEqual({ name: "policy", shell: "infra", policy: "auto" });
+		expect(parsed("list infra")).toEqual({ name: "list", parley: "infra" });
+		expect(parsed("keys infra")).toEqual({ name: "keys", parley: "infra" });
+		expect(parsed("policy infra auto")).toEqual({ name: "policy", parley: "infra", policy: "auto" });
 		expect(parsed("pending")).toEqual({ name: "pending" });
 		expect(error("leave")).toContain("usage");
 		expect(error("policy infra sometimes")).toContain("usage");
@@ -121,8 +121,8 @@ describe("parseCommand", () => {
 
 	test("log: optional name, -n count", () => {
 		expect(parsed("log")).toEqual({ name: "log", count: 20 });
-		expect(parsed("log infra -n 5")).toEqual({ name: "log", shell: "infra", count: 5 });
-		expect(parsed("log -n 7 infra")).toEqual({ name: "log", shell: "infra", count: 7 });
+		expect(parsed("log infra -n 5")).toEqual({ name: "log", parley: "infra", count: 5 });
+		expect(parsed("log -n 7 infra")).toEqual({ name: "log", parley: "infra", count: 7 });
 		expect(parsed("log -n=3")).toEqual({ name: "log", count: 3 });
 		expect(error("log -n zero")).toContain("-n");
 		expect(error("log -n 0")).toContain("-n");
@@ -131,13 +131,13 @@ describe("parseCommand", () => {
 });
 
 describe("completeArguments", () => {
-	const shells = [
+	const parleys = [
 		{ name: "infra", key: { rank: "A" as const } },
 		{ name: "integ", key: { rank: "S" as const } },
 	];
-	const values = (prefix: string) => completeArguments(prefix, shells)?.map(i => i.value) ?? null;
+	const values = (prefix: string) => completeArguments(prefix, parleys)?.map(i => i.value) ?? null;
 
-	test("subcommands, then the joined xshells for the commands that take a name", () => {
+	test("subcommands, then the joined parleys for the commands that take a name", () => {
 		expect(values("")).toHaveLength(11);
 		expect(values("l")).toEqual(["leave ", "list ", "log "]);
 		expect(values("leave ")).toEqual(["leave infra ", "leave integ "]);

@@ -1,6 +1,6 @@
 /**
  * Test support (not shipped logic): fake clock, in-memory relay, fake omp host and a node factory wiring
- * several `XshellSession`s over the fake relay. Real crypto, no network, no omp.
+ * several `ParleySession`s over the fake relay. Real crypto, no network, no omp.
  */
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -9,7 +9,7 @@ import { Audit } from "./audit.ts";
 import { type Envelope, type Kind, type Status, formatTimestamp, newMsgId, sealEnvelope, b64uDecode } from "./crypto.ts";
 import type { InjectedMessage, InjectOptions } from "./inbox.ts";
 import { loadIdentity, type Membership } from "./keys.ts";
-import { type SessionHost, type SessionState, XshellSession } from "./session.ts";
+import { type SessionHost, type SessionState, ParleySession } from "./session.ts";
 import { Store } from "./store.ts";
 import {
 	type Clock,
@@ -86,7 +86,7 @@ export async function settle(ms = 60): Promise<void> {
 
 export interface SentFrame {
 	from: string;
-	xshellId: string;
+	parleyId: string;
 	to: string;
 	env: Envelope;
 }
@@ -103,11 +103,11 @@ export class FakeNetwork {
 	readonly claims = new Map<string, { holder: FakeTransport; requester: FakeTransport; resolve(box: string): void; reject(error: Error): void }>();
 	private claimCounter = 0;
 
-	group(xshellId: string): Map<string, { transport: FakeTransport; certBox: string }> {
-		let g = this.members.get(xshellId);
+	group(parleyId: string): Map<string, { transport: FakeTransport; certBox: string }> {
+		let g = this.members.get(parleyId);
 		if (!g) {
 			g = new Map();
-			this.members.set(xshellId, g);
+			this.members.set(parleyId, g);
 		}
 		return g;
 	}
@@ -175,39 +175,39 @@ export class FakeTransport implements Transport {
 		return this.upRelays.has(relay);
 	}
 
-	private broadcast(xshellId: string, frame: Omit<PresenceFrame, "xshell_id">, exceptFp: string): void {
-		for (const [fp, entry] of this.net.group(xshellId)) {
+	private broadcast(parleyId: string, frame: Omit<PresenceFrame, "parley_id">, exceptFp: string): void {
+		for (const [fp, entry] of this.net.group(parleyId)) {
 			if (fp === exceptFp) continue;
-			setTimeout(() => entry.transport.handlers?.presence(TEST_ENDPOINT, { xshell_id: xshellId, ...frame }), 0);
+			setTimeout(() => entry.transport.handlers?.presence(TEST_ENDPOINT, { parley_id: parleyId, ...frame }), 0);
 		}
 	}
 
-	async join(_relay: string, xshellId: string, fp: string, certBox: string): Promise<void> {
-		this.net.group(xshellId).set(fp, { transport: this, certBox });
-		this.joined.set(xshellId, fp);
-		this.broadcast(xshellId, { fp, online: true, cert_box: certBox }, fp);
+	async join(_relay: string, parleyId: string, fp: string, certBox: string): Promise<void> {
+		this.net.group(parleyId).set(fp, { transport: this, certBox });
+		this.joined.set(parleyId, fp);
+		this.broadcast(parleyId, { fp, online: true, cert_box: certBox }, fp);
 	}
 
-	async leave(_relay: string, xshellId: string): Promise<void> {
-		const fp = this.joined.get(xshellId);
+	async leave(_relay: string, parleyId: string): Promise<void> {
+		const fp = this.joined.get(parleyId);
 		if (!fp) throw new RelayError("not_joined");
-		this.net.group(xshellId).delete(fp);
-		this.joined.delete(xshellId);
-		this.broadcast(xshellId, { fp, online: false }, fp);
+		this.net.group(parleyId).delete(fp);
+		this.joined.delete(parleyId);
+		this.broadcast(parleyId, { fp, online: false }, fp);
 	}
 
-	async list(_relay: string, xshellId: string): Promise<MemberFrame[]> {
-		return [...this.net.group(xshellId)].map(([fp, e]) => ({ fp, cert_box: e.certBox }));
+	async list(_relay: string, parleyId: string): Promise<MemberFrame[]> {
+		return [...this.net.group(parleyId)].map(([fp, e]) => ({ fp, cert_box: e.certBox }));
 	}
 
-	async send(_relay: string, xshellId: string, to: string, env: unknown): Promise<void> {
-		const from = this.joined.get(xshellId);
+	async send(_relay: string, parleyId: string, to: string, env: unknown): Promise<void> {
+		const from = this.joined.get(parleyId);
 		if (!from) throw new RelayError("not_joined");
-		const target = this.net.group(xshellId).get(to);
+		const target = this.net.group(parleyId).get(to);
 		if (!target) throw new RelayError("offline", "offline");
-		this.net.sent.push({ from, xshellId, to, env: env as Envelope });
+		this.net.sent.push({ from, parleyId, to, env: env as Envelope });
 		const copy = structuredClone(env);
-		setTimeout(() => target.transport.handlers?.deliver(TEST_ENDPOINT, xshellId, copy), 0);
+		setTimeout(() => target.transport.handlers?.deliver(TEST_ENDPOINT, parleyId, copy), 0);
 	}
 
 	private requireUp(relay: string): void {
@@ -255,9 +255,9 @@ export class FakeTransport implements Transport {
 	}
 
 	closeAll(): void {
-		for (const [xshellId, fp] of this.joined) {
-			this.net.group(xshellId).delete(fp);
-			this.broadcast(xshellId, { fp, online: false }, fp);
+		for (const [parleyId, fp] of this.joined) {
+			this.net.group(parleyId).delete(fp);
+			this.broadcast(parleyId, { fp, online: false }, fp);
 		}
 		this.joined.clear();
 		this.refs.clear();
@@ -338,16 +338,16 @@ export interface Node {
 	audit: Audit;
 	transport: FakeTransport;
 	host: FakeHost;
-	session: XshellSession;
+	session: ParleySession;
 }
 
 export function makeNode(net: FakeNetwork, clock: FakeClock, label: string): Node {
-	const root = fs.mkdtempSync(path.join(os.tmpdir(), `xshell-${label}-`));
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), `xsp-${label}-`));
 	const store = new Store(root);
 	const audit = new Audit(store, () => clock.now());
 	const transport = new FakeTransport(net);
 	const host = new FakeHost();
-	const session = new XshellSession({ store, audit, transport, clock, host });
+	const session = new ParleySession({ store, audit, transport, clock, host });
 	return { label, root, store, audit, transport, host, session };
 }
 
@@ -359,12 +359,12 @@ export function cleanup(nodes: Node[]): void {
 }
 
 /** A creator (master), plus joiners with the ask or answer key, all online and aware of each other. */
-export async function makeShell(
+export async function makeParley(
 	nodes: { creator: Node; masters?: Node[]; slaves?: Node[] },
 	options: { name?: string; policy?: "ask" | "auto" } = {},
-): Promise<{ xshellId: string; keys: { ask: string; answer: string } }> {
+): Promise<{ parleyId: string; keys: { ask: string; answer: string } }> {
 	const name = options.name ?? "infra";
-	const created = await nodes.creator.session.createShell({
+	const created = await nodes.creator.session.createParley({
 		name,
 		relay: "relay.test",
 		alias: "boss",
@@ -373,16 +373,16 @@ export async function makeShell(
 	});
 	let i = 0;
 	for (const n of nodes.masters ?? []) {
-		await n.session.joinShell({ key: created.keys.ask, alias: `master${++i}`, role: "second master", policy: options.policy ?? "auto" });
+		await n.session.joinParley({ key: created.keys.ask, alias: `master${++i}`, role: "second master", policy: options.policy ?? "auto" });
 	}
 	i = 0;
 	for (const n of nodes.slaves ?? []) {
-		await n.session.joinShell({ key: created.keys.answer, alias: `slave${++i}`, role: "does things", policy: options.policy ?? "auto" });
+		await n.session.joinParley({ key: created.keys.answer, alias: `slave${++i}`, role: "does things", policy: options.policy ?? "auto" });
 	}
 	const all = [nodes.creator, ...(nodes.masters ?? []), ...(nodes.slaves ?? [])];
 	for (const n of all) await n.session.refreshAll();
 	await settle();
-	return { xshellId: created.membership.xshellId, keys: created.keys };
+	return { parleyId: created.membership.parleyId, keys: created.keys };
 }
 
 /** Builds an envelope signed by `sender`'s real identity, bypassing the extension's own sending rules. */
@@ -408,7 +408,7 @@ export async function craftEnvelope(
 	return sealEnvelope(
 		{
 			v: 1,
-			xshell_id: membership.xshellId,
+			parley_id: membership.parleyId,
 			msg_id: options.msgId ?? newMsgId(),
 			kind: options.kind,
 			from: membership.fp,
@@ -422,6 +422,6 @@ export async function craftEnvelope(
 	);
 }
 
-export function deliverTo(recipient: Node, xshellId: string, env: Envelope): void {
-	recipient.transport.handlers?.deliver(TEST_ENDPOINT, xshellId, structuredClone(env));
+export function deliverTo(recipient: Node, parleyId: string, env: Envelope): void {
+	recipient.transport.handlers?.deliver(TEST_ENDPOINT, parleyId, structuredClone(env));
 }
